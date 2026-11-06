@@ -1,0 +1,2 @@
+# the patches must keep their exact bytes (RunUO's files are CRLF): never convert their line endings
+*.patch -text

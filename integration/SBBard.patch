@@ -1,0 +1,26 @@
+diff --git a/Scripts/Mobiles/Vendors/SBInfo/SBBard.cs b/Scripts/Mobiles/Vendors/SBInfo/SBBard.cs
+index 005492f..836edc5 100644
+--- a/Scripts/Mobiles/Vendors/SBInfo/SBBard.cs
++++ b/Scripts/Mobiles/Vendors/SBInfo/SBBard.cs
+@@ -1,3 +1,9 @@
++/* Scripts/Mobiles/Vendors/SBInfo/SBBard.cs
++ * Changelog
++ *  11/5/26, Adam (AIMS integration)
++ *      Bards sell the music system's manuscript paper, music composition book and music box (marked "AIMS:").
++ */
++
+ using Server.Items;
+ using System.Collections.Generic;
+ 
+@@ -23,6 +29,11 @@ namespace Server.Mobiles
+                 Add(new GenericBuyInfo(typeof(Tambourine), 21, (10), 0x0E9E, 0));
+                 Add(new GenericBuyInfo(typeof(LapHarp), 21, (10), 0x0EB2, 0));
+                 Add(new GenericBuyInfo(typeof(Lute), 21, (10), 0x0EB3, 0));
++
++                // AIMS: the music system's paper, composition book and music box (prices: set your own)
++                Add(new GenericBuyInfo(typeof(ManuscriptPaper), 10, (10), 0x0E34, 0));
++                Add(new GenericBuyInfo(typeof(Server.Misc.MusicCompositionBook), 15, (10), 0xFF0, 0));
++                Add(new GenericBuyInfo(typeof(MusicBox), 500, (10), 0x2AF9, 0));
+             }
+         }
+ 

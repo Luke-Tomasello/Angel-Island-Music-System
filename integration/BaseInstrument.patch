@@ -1,0 +1,35 @@
+diff --git a/Scripts/Items/Skill Items/Musical Instruments/BaseInstrument.cs b/Scripts/Items/Skill Items/Musical Instruments/BaseInstrument.cs
+index 35ad345..875d7a4 100644
+--- a/Scripts/Items/Skill Items/Musical Instruments/BaseInstrument.cs	
++++ b/Scripts/Items/Skill Items/Musical Instruments/BaseInstrument.cs	
+@@ -1,3 +1,11 @@
++/* Scripts/Items/Skill Items/Musical Instruments/BaseInstrument.cs
++ * Changelog
++ *  11/5/26, Adam (AIMS integration)
++ *      The two edits the music system (Scripts\Engines\AIMusicSystem) needs here, marked "AIMS:": ConsumeUse is
++ *      virtual (music system instruments never wear out), and a music system instrument (RazorInstrument: sheet music,
++ *      music devices) can't be picked as a bard's instrument.
++ */
++
+ using Server.Engines.Craft;
+ using Server.Mobiles;
+ using Server.Network;
+@@ -143,7 +151,7 @@ namespace Server.Items
+             return 100;
+         }
+ 
+-        public void ConsumeUse(Mobile from)
++        public virtual void ConsumeUse(Mobile from)   // AIMS: virtual, so music system instruments never wear out
+         {
+             // TODO: Confirm what must happen here?
+ 
+@@ -203,7 +211,8 @@ namespace Server.Items
+         {
+             BaseInstrument instrument = targeted as BaseInstrument;
+ 
+-            if (instrument == null)
++            // AIMS: a music system instrument (sheet music, music devices) plays songs; it is not a bard's instrument
++            if (instrument == null || instrument is RazorInstrument)
+             {
+                 from.SendLocalizedMessage(500619); // That is not a musical instrument.
+             }

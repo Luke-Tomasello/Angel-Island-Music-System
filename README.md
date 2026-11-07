@@ -177,6 +177,22 @@ Staff can only buy music on a Test Center. Test with a player account, or overri
 A Debug build prints the playback measurements; a Release build doesn't. `Logs\MusicEngine.log` gets them either way,
 unless your host turns `MusicEngineLog` off.
 
+## For players
+
+How Angel Island's players use it is on the Angel Island wiki:
+
+- [Music Composition](https://game-master.net/aiwiki/index.php/Music_Composition): writing songs (notes, chords,
+  timing, directives)
+- [Sheet Music](https://game-master.net/aiwiki/index.php/Sheet_Music)
+- [Music Box](https://game-master.net/aiwiki/index.php/Music_Box): publishing, listening and buying, every command
+- [Musicianship](https://game-master.net/aiwiki/index.php/Musicianship)
+- [Sound List](https://game-master.net/aiwiki/index.php/Sound_List): every sound a song can use, percussion included
+- [MidiToAIMS](https://game-master.net/aiwiki/index.php/MidiToAIMS): the composer's tool that turns MIDI files into
+  songs
+
+They describe Angel Island's settings: prices, Music Karma and who reviews songs are your shard's to set
+([Step 5](#step-5-wire-aims-to-your-shard)).
+
 ## Hear it
 
 - The 2022 [Battle of the Bards](https://www.youtube.com/watch?v=GCqLpk5YO1c), where Angel Island's composers shared

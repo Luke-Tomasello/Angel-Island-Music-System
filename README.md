@@ -6,6 +6,30 @@ players listen, and buy them. It has been the music of the Angel Island shards s
 
 Why it exists, and whose work it is: **[Why I Built AIMS](AIMusicSystem/Docs/WHY.md)**.
 
+## What AIMS is
+
+Ultima Online gave its harp, lap harp and lute a set of individual note sounds, built into every game client. They were
+there to give bard skills a musical touch; as far as we know, no one had used them to play actual music. AIMS rests on
+a few ideas that turned them into instruments:
+
+- **The game's notes are an instrument.** In 2006 Rhiannon built the first player on Angel Island, with fixes by Pix
+  and Adam: recognizable melodies, note by note, using only the game's own sounds, sent from the server. Players
+  install nothing.
+- **Music is a language a player can write.** Beginning in December 2021, Adam rebuilt the player into a real
+  instrument: a `[play` line, short enough to type in the game, carries notes, rests, instrument changes and sound
+  effects. A song is a script of those lines (an `.rzr` file), in the same `say '[play ...'` and `wait` form players
+  ran in Razor, the game's client assistant.
+- **A song is a thing in the world.** Players compose in books and transcribe their work onto manuscript paper. The
+  result is sheet music: an item that carries its title and its composer's name, that anyone can hold, give away or
+  play.
+- **Music has an audience, and composers have standing.** Music boxes gather published songs into a library every
+  player can browse, listen to and buy from. Composers are paid for their sales and build a reputation for their work.
+
+The books, sheet music, music boxes and composers' market were built in the first months of 2022. Everything since
+refines those ideas: more precise timing, songs with sections and repeats, review, and the work that lets AIMS drop
+into other shards. The ideas themselves date from 2006 and the winter of 2021-22, and they are what this
+repository preserves.
+
 ## Drop it into your RunUO server
 
 AIMS runs on Angel Island, but it was made to drop into other shards. To prove it, we took a stock RunUO 2.6, moved it
@@ -135,6 +159,7 @@ namespace Server
 | `Get/SetMusicKarma` | Music Karma: earned by composing, publishing, sales and plays; 1,000 unlocks sound effects | Kept by AIMS |
 | `Get/SetFilterMusic` | `[FilterMusic`: a player's mute for other players' music | Kept by AIMS |
 | `Withdraw` | Paying for a song | The buyer's bank box |
+| `Deposit` | Paying the composer: the sale, or credit owed from a sale their bank box couldn't take (paid at their next music box visit) | The composer's bank box |
 | `Dupe`, `MarkStaffOwned` | Staff copies of sheet music (`dupe`, `[DupeMusic`) | The sheet copies itself; nothing tracked |
 | `MarkTemporary` | Temporary playback copies (AIMS deletes its own; this is your safety net) | Nothing |
 | `MoveToInternal` | Where the library keeps its sheets | Off the map (`Internalize`) |
@@ -143,6 +168,9 @@ namespace Server
 | `PlayAccessLevel` | Who may use `[play` | Players |
 | `MusicEngineLog` | `Logs\MusicEngine.log`: playback timing measurements | On |
 | `OnMusicSold`, `HasLeaderboard` | A sale, for your leaderboard; and whether to tell the composer to check it | Nothing; no |
+| `OnMusicPurchased` | Every purchase as it happens: buyer, song, price paid | Nothing |
+| `TrackNote` | A note about a track when someone asks (`who`, staff `find`) | None |
+| `RefuseSubmission` | Your own rule for refusing a submission or remaster, with its reason | Nothing refused |
 
 Angel Island's own host, `AngelIslandAimsHost`, wires all of these to its systems: it's a complete example of what a
 shard can connect (in the Angel Island Server repository, `scripts/Engines/AIMusicHost`).
@@ -155,6 +183,7 @@ shard can connect (in the Angel Island Server repository, `scripts/Engines/AIMus
 | `Saves\MusicContexts.bin` | Each player's `[play` settings |
 | `Saves\AIMS\Players.bin` | Music Karma and `[FilterMusic`, when your host doesn't keep them |
 | `Logs\MusicEngine.log` | Playback measurements (turn off with `MusicEngineLog`) |
+| `Logs\MusicCredits.log` | Credit paid to composers, and credit forfeited (a deleted character, or a library moved from another shard: credit is paid only where it was earned) |
 
 ## Troubleshooting
 
@@ -198,8 +227,9 @@ They describe Angel Island's settings: prices, Music Karma and who reviews songs
 - The 2022 [Battle of the Bards](https://www.youtube.com/watch?v=GCqLpk5YO1c), where Angel Island's composers shared
   their work
 - [Ultima Online Free Shard](https://www.youtube.com/@UltimaOnlineFreeShard) on YouTube
-- Songs by Galois, Angel Island's Grandmaster Composer, shared with his permission, are in the Angel Island Server
-  repository (`AI Music Composer/Data`)
+- The music library of Angel Island's shards, shared with its composers' permission, is in the Angel Island Server
+  repository (`AI Music Composer/Data`, one folder per composer): songs by Galois, Angel Island's Grandmaster
+  Composer, Jocelyn, Bushwick Bill, Pastor Wydstrin, Bravado, Loser Girl, Willibald, Xavier, Lady Runa and a sheep
 
 ## Credits and license
 

@@ -1,9 +1,7 @@
 /***************************************************************************
  *
- *   RunUO                   : May 1, 2002
- *   portions copyright      : (C) The RunUO Software Team
- *   email                   : info@runuo.com
- *   
+ *                   The Angel Island Music System (AIMS)
+ *
  *   Angel Island UO Shards  : March 25, 2004
  *   portions copyright      : (C) 2004-2026 Tomasello Software LLC.
  *   email                   : luke@tomasello.com
@@ -21,7 +19,7 @@
 
 /* Scripts/Engines/Music/ManuscriptPaper.cs
  * Changelog
- *  11/5/26, Adam (2026 modernization, 10/29/26 to 11/5/26)
+ *  11/8/26, Adam (2026 modernization, 10/29/26 to 11/8/26)
  *      The book is compiled (MusicCompiler) before it becomes sheet music: sections, plays and repeats are expanded,
  *      and a book without them compiles to itself (same script, same hash); a book with mistakes is refused, page by
  *      page. A song too long for one book is written in several (# Song: <title>, # Book: 2/3) and made into one sheet
@@ -32,6 +30,10 @@
  *      Portable AIMS: logging, the stable hash, Shuffle, LocalTimer and the Data folder go through AimsLog and AimsUtil
  *      (Host\), so this folder drops into other RunUO servers.
  *      AimsHost: the preview's temporary sheet. Angel Island only (#if ANGEL_ISLAND): Dupe.
+ *      A book with no author (blank, the book's "Author", or "MidiToAims", which MidiToAims wrote when "Arranged by" was
+ *      blank) is credited to the one transcribing it, and they're told (it was refused: "must have an author").
+ *      Underscores in a title read as spaces, as MidiToAims names a song from its MIDI file ('Alice_In_Chains_-_Rooster'
+ *      came from an older MidiToAims), and the composer is told; a # in a title stays ('Prelude in C# minor').
  *  3/3/22, Adam (Music Karma / IsSound)
  *      Don't allow the creation of Rolled Up Sheet music if the author is using sound effects and doesn't have sufficient Music Karma.
  *  2/26/22, Adam (ConcertMode)
@@ -315,16 +317,27 @@ namespace Server.Items
                     mcb.Title = title;
                 if (!string.IsNullOrEmpty(author))
                     mcb.Author = author;
+                // underscores read as spaces ('Alice_In_Chains_-_Rooster', a MIDI file's name that older MidiToAims
+                //  used as the title); the same rule as MidiToAims's DefaultSong
+                if (mcb.Title != null && mcb.Title.Contains('_'))
+                {
+                    mcb.Title = string.Join(" ", mcb.Title.Replace('_', ' ').Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
+                    if (mcb.Title.Length > 0)
+                        from.SendMessage("Underscores in the title read as spaces: {0}.", mcb.Title);
+                }
 
                 if (mcb.Title == null || mcb.Title.Length == 0 || mcb.Title.ToLower() == "title")
                 {
                     from.SendMessage("your music composition book must have a title.");
                     return null;
                 }
-                if (mcb.Author == null || mcb.Author.Length == 0 || mcb.Author.ToLower() == "author")
+                // no author (or the book's placeholder, or MidiToAims's own name, which older MidiToAims wrote when
+                //  "Arranged by" was blank): the one transcribing it is its author
+                if (mcb.Author == null || mcb.Author.Trim().Length == 0 || mcb.Author.Trim().ToLower() == "author"
+                    || mcb.Author.Trim().Equals("MidiToAims", StringComparison.OrdinalIgnoreCase))
                 {
-                    from.SendMessage("your music composition book must have an author.");
-                    return null;
+                    mcb.Author = from.Name;
+                    from.SendMessage("The book names no author: you are credited as its author ({0}).", from.Name);
                 }
                 if (price > 0 && napster == true)
                 {
@@ -645,10 +658,16 @@ namespace Server.Items
                             price = 0;
                     }
                     else if (line.ToLower().Contains("song:"))
-                    {
-                        title = line;
-                        title = title.Replace("#", "");
-                        title = title.Replace("song:", "", StringComparison.CurrentCultureIgnoreCase).Trim();
+                    {   // only the '# Song:' marker goes: a # in the title stays ('Prelude in C# minor')
+                        Match m = s_songTitle.Match(line);
+                        if (m.Success)
+                            title = m.Groups["title"].Value;
+                        else
+                        {
+                            title = line;
+                            title = title.Replace("#", "");
+                            title = title.Replace("song:", "", StringComparison.CurrentCultureIgnoreCase).Trim();
+                        }
                     }
                 }
             }

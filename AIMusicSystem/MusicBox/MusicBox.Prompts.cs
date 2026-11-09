@@ -1,9 +1,7 @@
 /***************************************************************************
  *
- *   RunUO                   : May 1, 2002
- *   portions copyright      : (C) The RunUO Software Team
- *   email                   : info@runuo.com
- *   
+ *                   The Angel Island Music System (AIMS)
+ *
  *   Angel Island UO Shards  : March 25, 2004
  *   portions copyright      : (C) 2004-2026 Tomasello Software LLC.
  *   email                   : luke@tomasello.com
@@ -22,12 +20,18 @@
 
 /* Scripts\Engines\AIMusicSystem\MusicBox\MusicBox.Prompts.cs
  * Changelog
- *  11/5/26, Adam (2026 modernization, 10/29/26 to 11/5/26)
+ *  11/8/26, Adam (2026 modernization, 10/29/26 to 11/8/26)
  *      The review, rejection reason and buy prompts.
  *      Split from MusicBox.cs; its history before 10/29/26 is in MusicBox.cs.
  *      Portable AIMS: logging, the stable hash, Shuffle, LocalTimer and the Data folder go through AimsLog and AimsUtil
  *      (Host\), so this folder drops into other RunUO servers.
  *      AimsHost: paying for a track (Angel Island: all enrolled bank accounts).
+ *      Every purchase calls AimsHost.OnMusicPurchased (buyer, song, record, price paid). A song the shard holds for
+ *      someone else (owned by AimsHost.SystemMobile) queues no "you sold music" notice: there is no seller here to tell.
+ *      The composer is paid through AimsHost.Deposit (it was Banker.Deposit), so a shard's own banking can take it. A sale
+ *      their bank box can't take is still kept as credit; it's now paid at their next music box visit (CollectCredits).
+ *      A rejection for 'Other' asks staff for a note to the composer (RejectionNotePrompt, one line, up to 100
+ *      characters: what ClassicUO's chat box sends), kept as MusicInfo.Note and told to the composer.
  */
 
 using Server.Accounting;
@@ -194,6 +198,13 @@ namespace Server.Items
                     MusicLibrary.Repository[m_rsm].Reason = reason;
 
                     from.SendMessage("Your reason for the rejection was {0}.", reason.ToString());
+
+                    // Other: in staff's own words, for the composer (TellComposer, 'status')
+                    if (reason == RejectionReason.Other)
+                    {
+                        from.SendMessage("Tell the composer why, in one line (up to {0} characters; Esc for no note):", RejectionNotePrompt.MaxLength);
+                        from.Prompt = new RejectionNotePrompt(m_rsm);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -204,6 +215,44 @@ namespace Server.Items
             public override void OnCancel(Mobile from)
             {
                 // Intentionally no-op.
+            }
+        }
+        // staff's note to the composer on a rejection for 'Other' (MusicInfo.Note)
+        private class RejectionNotePrompt : Prompt
+        {
+            // what ClassicUO's chat box sends at most (its MAX_MESSAGE_LENGHT); longer text from another client is cut here
+            public const int MaxLength = 100;
+            private readonly RolledUpSheetMusic m_rsm;
+
+            public RejectionNotePrompt(RolledUpSheetMusic rsm)
+            {
+                m_rsm = rsm;
+            }
+
+            public override void OnResponse(Mobile from, string text)
+            {
+                try
+                {
+                    if (from == null || m_rsm == null || string.IsNullOrWhiteSpace(text)
+                        || !MusicLibrary.Repository.TryGetValue(m_rsm, out MusicInfo? info) || info.Status != SubmissionStatus.Rejected)
+                        return;
+
+                    text = text.Trim();
+                    if (text.Length > MaxLength)
+                        text = text.Substring(0, MaxLength);
+                    info.Note = text;
+                    info.ComposerTold = false;      // told already (they were at a music box)? then told again, with the note
+                    from.SendMessage("The composer will be told: {0}", MusicLibrary.ReviewReason(info));
+                }
+                catch (Exception ex)
+                {
+                    AimsLog.LogException(ex);
+                }
+            }
+
+            public override void OnCancel(Mobile from)
+            {
+                from?.SendMessage("No note: the composer will be told only that the song wasn't approved.");
             }
         }
         private class BuyMusicBoxPrompt : Prompt
@@ -280,10 +329,12 @@ namespace Server.Items
                     // NOTE: We re-check ContainsKey above and reuse mi to avoid double indexing races.
                     if (mi.Owner != null)
                     {
-                        if (Mobiles.Banker.Deposit(mi.Owner, m_price))
+                        if (AimsHost.Current.Deposit(mi.Owner, m_price))
                         {
                             // Notify the seller via the buyer's notification list (used for later "you sold music" messages).
-                            if (m_musicBox.m_playContext != null)
+                            //  A song the shard holds for someone else (owned by AimsHost.SystemMobile) has no seller here
+                            //  to tell: the host hears of the sale through OnMusicPurchased.
+                            if (m_musicBox.m_playContext != null && mi.Owner != AimsHost.Current.SystemMobile)
                             {
                                 if (m_musicBox.m_playContext.PlayerNotificationList != null)
                                     m_musicBox.m_playContext.PlayerNotificationList.Add(new YouSoldMusic(mi.Owner, from, m_rsm, mi));
@@ -291,7 +342,8 @@ namespace Server.Items
                         }
                         else
                         {
-                            // Bank box can't hold gold: accumulate credit owed.
+                            // Bank box can't hold gold: accumulate credit owed (paid at the composer's next music box
+                            //  visit: MusicLibrary.CollectCredits).
                             mi.Credit += m_price;
                         }
 
@@ -312,6 +364,9 @@ namespace Server.Items
                     {
                         AwardSkillFameKarma(pm, SalesFactor);
                     }
+
+                    // the shard hears of every purchase, as it happens (what it paid, for which song, by whom)
+                    AimsHost.Current.OnMusicPurchased(from, m_rsm, mi, m_price);
                 }
                 catch (Exception ex)
                 {

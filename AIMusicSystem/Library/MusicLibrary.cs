@@ -1,8 +1,6 @@
 /***************************************************************************
  *
- *   RunUO                   : May 1, 2002
- *   portions copyright      : (C) The RunUO Software Team
- *   email                   : info@runuo.com
+ *                   The Angel Island Music System (AIMS)
  *
  *   Angel Island UO Shards  : March 25, 2004
  *   portions copyright      : (C) 2004-2026 Tomasello Software LLC.
@@ -22,7 +20,7 @@
 
 /* Scripts\Engines\AIMusicSystem\Library\MusicLibrary.cs
  * Changelog
- *  11/5/26, Adam (2026 modernization, 10/29/26 to 11/5/26)
+ *  11/8/26, Adam (2026 modernization, 10/29/26 to 11/8/26)
  *      The global music library, moved out of MusicBox unchanged but for the names (GlobalMusicRepository is
  *      Repository): every approved player-composed track and the review queue, the database records, Saves/Music.bin
  *      (its format unchanged), the 5-minute maintenance, FindSong and [DupeMusic. Anything can use it without a music
@@ -31,6 +29,11 @@
  *      (Host\), so this folder drops into other RunUO servers.
  *      AimsHost: account GUIDs and staff copies ([DupeMusic). Title matching uses AimsUtil.LongestCommonSubstring (it
  *      used the Intelligent Dialogue System's rolling hash; the same scores).
+ *      Maintenance: a record whose composer is gone (no character on this shard, or deleted) forfeits its credit
+ *      (ForfeitCredit, MusicCredits.log) as its music becomes free.
+ *      Composers hear review decisions: MusicInfo version 5 saves Note (staff's note on a rejection) and the
+ *      ComposerTold flag (a record from an older save counts as told); a status changed to Approved or Rejected is news
+ *      until TellComposer (MusicLibrary.Composers.cs) or 'status' has told them.
  */
 
 using Server.Commands;
@@ -130,6 +133,7 @@ namespace Server.Items
             None,
             Napster = 0x01,
             Remastered = 0x02,
+            ComposerTold = 0x04,    // the composer has heard the latest review decision (TellComposer, status)
         }
         public record MusicInfo
         {
@@ -141,14 +145,29 @@ namespace Server.Items
             int m_Price;                        // cost
 
             int m_totalSales = 0;               // total track sales in gold
-            int m_credit = 0;                   // couldn't fit in bank box .. credit (we'll try to play later[TBD])
+            int m_credit = 0;                   // couldn't fit in bank box: owed, paid at the composer's next music box visit (CollectCredits)
             int m_sold = 0;                     // units sold
             int m_plays = 0;                    // number of times this track has been played
             SubmissionStatus m_status;          // submission status
             RejectionReason m_rejectionReason;  // why rejected
             MusicInfoFlags m_flags = MusicInfoFlags.None;
+            string? m_note;                     // staff's note to the composer on a rejection (version 5)
             public List<PurchaserInfo> Purchasers => m_purchasers;
-            public SubmissionStatus Status { get { return m_status; } set { m_status = value; } }
+            // a new decision (approved or rejected) is news for the composer: TellComposer tells them once
+            public SubmissionStatus Status
+            {
+                get { return m_status; }
+                set
+                {
+                    if (value != m_status && value != SubmissionStatus.Pending)
+                        ComposerTold = false;
+                    if (value == SubmissionStatus.Approved)
+                        m_note = null;
+                    m_status = value;
+                }
+            }
+            public string? Note { get { return m_note; } set { m_note = string.IsNullOrWhiteSpace(value) ? null : value.Trim(); } }
+            public bool ComposerTold { get { return m_flags.HasFlag(MusicInfoFlags.ComposerTold); } set { m_flags = value ? m_flags | MusicInfoFlags.ComposerTold : m_flags & ~MusicInfoFlags.ComposerTold; } }
             public RejectionReason Reason { get { return m_rejectionReason; } set { m_rejectionReason = value; } }
             public int TotalSales { get { return m_totalSales; } set { m_totalSales = value; } }
             public int Credit { get { return m_credit; } set { m_credit = value; } }
@@ -194,6 +213,11 @@ namespace Server.Items
 
                 switch (version)
                 {
+                    case 5:
+                        {
+                            m_note = reader.ReadString();
+                            goto case 4;
+                        }
                     case 4:
                         {
                             m_OwnerGUID = reader.ReadUInt();
@@ -238,13 +262,22 @@ namespace Server.Items
                     default:
                         throw new Exception("MusicInfo: invalid version");
                 }
+
+                // saved before composers were told of decisions: what's decided is old news, not told again
+                if (version < 5)
+                    m_flags |= MusicInfoFlags.ComposerTold;
             }
             public void Serialize(GenericWriter writer)
             {
-                int version = 4;
+                int version = 5;
                 writer.WriteEncodedInt(version);
                 switch (version)
                 {
+                    case 5:
+                        {
+                            writer.Write(m_note);
+                            goto case 4;
+                        }
                     case 4:
                         {
                             writer.Write(m_OwnerGUID);
@@ -407,7 +440,7 @@ namespace Server.Items
         ///
         /// Responsibilities:
         /// - Remove deleted RolledUpSheetMusic entries.
-        /// - If the composer no longer exists, mark their music as free (Price = 0).
+        /// - If the composer no longer exists, mark their music as free (Price = 0) and forfeit any credit owed (ForfeitCredit).
         ///
         /// Defensive rules:
         /// - Avoid modifying the dictionary while enumerating.
@@ -441,9 +474,12 @@ namespace Server.Items
                         continue;
 
                     // If composer leaves shard or deletes character,
-                    // music becomes free.
+                    // music becomes free, and credit owed to them is forfeited (MusicLibrary.Composers.cs, Credit).
                     if (info.Owner == null || info.Owner.Deleted)
+                    {
                         info.Price = 0;
+                        ForfeitCredit(rsm, info, info.Owner == null ? "the composer has no character on this shard" : "the composer's character was deleted");
+                    }
                 }
 
                 // Remove after enumeration to avoid modifying collection mid-loop.

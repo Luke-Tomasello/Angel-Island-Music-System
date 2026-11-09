@@ -171,6 +171,7 @@ namespace Server
 | `OnMusicPurchased` | Every purchase as it happens: buyer, song, price paid | Nothing |
 | `TrackNote` | A note about a track when someone asks (`who`, staff `find`) | None |
 | `RefuseSubmission` | Your own rule for refusing a submission or remaster, with its reason | Nothing refused |
+| `ReviewNeeded` | Songs await review (every 5 minutes while they do): who hears of it | Administrators: "New music, review required." |
 
 Angel Island's own host, `AngelIslandAimsHost`, wires all of these to its systems: it's a complete example of what a
 shard can connect (in the Angel Island Server repository, `scripts/Engines/AIMusicHost`).

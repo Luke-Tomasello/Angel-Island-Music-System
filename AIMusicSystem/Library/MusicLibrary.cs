@@ -34,6 +34,8 @@
  *      Composers hear review decisions: MusicInfo version 5 saves Note (staff's note on a rejection) and the
  *      ComposerTold flag (a record from an older save counts as told); a status changed to Approved or Rejected is news
  *      until TellComposer (MusicLibrary.Composers.cs) or 'status' has told them.
+ *      The staff notice of songs awaiting review goes through the host (AimsHost.ReviewNeeded; its default is the
+ *      notice as it was), so a shard can tell others, or report review its own way.
  */
 
 using Server.Commands;
@@ -493,9 +495,10 @@ namespace Server.Items
                 AimsLog.LogException(ex);
             }
         }
+        // the shard decides who hears of it (default: Administrators, "[Music System] New music, review required.")
         private static void ReviewNotify()
         {
-            Commands.CommandHandlers.BroadcastMessage(AccessLevel.Administrator, 54, string.Format("[{0}] {1}", "Music System", "New music, review required."));
+            AimsHost.Current.ReviewNeeded(UnpublishedNeedsReview.Count);
         }
         #endregion Maintenance
 

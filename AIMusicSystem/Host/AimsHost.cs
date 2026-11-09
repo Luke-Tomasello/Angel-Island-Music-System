@@ -20,6 +20,9 @@
 
 /* Scripts\Engines\AIMusicSystem\Host\AimsHost.cs
  * Changelog
+ *  11/9/26, Adam (review notice)
+ *      ReviewNeeded: songs submitted here await review (every 5 minutes while they do). Default: Administrators are told
+ *      "[Music System] New music, review required.", as the library's maintenance always did itself.
  *  11/7/26, Adam (track note, submission refusal)
  *      TrackNote: a note about a track in the line staff get ('find'; 'who' for those who may use 'find'). RefuseSubmission: the shard may
  *      refuse a submission or remaster, with its reason. Both do nothing by default.
@@ -379,6 +382,16 @@ namespace Server
         public virtual string? RefuseSubmission(Mobile composer, Misc.RolledUpSheetMusic sheet, bool remaster)
         {
             return null;
+        }
+
+        /// <summary>
+        /// Songs submitted on this shard are waiting for review ('count' of them). Called every 5 minutes while any are,
+        /// from the library's maintenance. Default: Administrators and above who are online are told "[Music System] New
+        /// music, review required." Override to tell whom you choose, or no one (a shard that reports review its own way).
+        /// </summary>
+        public virtual void ReviewNeeded(int count)
+        {
+            Commands.CommandHandlers.BroadcastMessage(AccessLevel.Administrator, 54, "[Music System] New music, review required.");
         }
 
         /// <summary>

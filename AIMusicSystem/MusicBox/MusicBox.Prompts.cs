@@ -20,6 +20,10 @@
 
 /* Scripts\Engines\AIMusicSystem\MusicBox\MusicBox.Prompts.cs
  * Changelog
+ *  11/14/26, Adam
+ *      A sale is recorded by RecordSale (the buy prompt's bookkeeping, unchanged, so it can be tested alone). An
+ *      imported song ([MusicImport) pays no one: no one here composed it, so its owner gets no gold, credit, sale notice
+ *      or sales points, and the price leaves the economy unless the shard sends it somewhere (AimsHost.OnImportedSale).
  *  11/8/26, Adam (2026 modernization, 10/29/26 to 11/8/26)
  *      The review, rejection reason and buy prompts.
  *      Split from MusicBox.cs; its history before 10/29/26 is in MusicBox.cs.
@@ -314,59 +318,7 @@ namespace Server.Items
                     from.SendMessage("You purchased {0} for {1} gold.", m_rsm, m_price);
                     m_musicBox.Say(string.Format("'{0}', added to your library.", m_rsm), hue: 54);
 
-                    MusicInfo mi = MusicLibrary.Repository[m_rsm];
-
-                    if (mi.Purchasers == null)
-                        throw new InvalidOperationException("MusicInfo.Purchasers invariant violated.");
-
-                    mi.Purchasers.Add(new PurchaserInfo(from, mi.Price));
-
-                    // Refresh play queue so the new purchase becomes eligible immediately.
-                    if (m_musicBox.m_playContext != null)
-                        m_musicBox.m_playContext.RefreshPlayQueue();
-
-                    // Now pay the author (or credit if deposit fails).
-                    // NOTE: We re-check ContainsKey above and reuse mi to avoid double indexing races.
-                    if (mi.Owner != null)
-                    {
-                        if (AimsHost.Current.Deposit(mi.Owner, m_price))
-                        {
-                            // Notify the seller via the buyer's notification list (used for later "you sold music" messages).
-                            //  A song the shard holds for someone else (owned by AimsHost.SystemMobile) has no seller here
-                            //  to tell: the host hears of the sale through OnMusicPurchased.
-                            if (m_musicBox.m_playContext != null && mi.Owner != AimsHost.Current.SystemMobile)
-                            {
-                                if (m_musicBox.m_playContext.PlayerNotificationList != null)
-                                    m_musicBox.m_playContext.PlayerNotificationList.Add(new YouSoldMusic(mi.Owner, from, m_rsm, mi));
-                            }
-                        }
-                        else
-                        {
-                            // Bank box can't hold gold: accumulate credit owed (paid at the composer's next music box
-                            //  visit: MusicLibrary.CollectCredits).
-                            mi.Credit += m_price;
-                        }
-
-                        mi.TotalSales += m_price;
-                        mi.Sold += 1;
-                    }
-                    else
-                    {
-                        // No owner: track becomes free.
-                        mi.Price = 0;
-                        mi.Sold += 1;
-                    }
-
-                    // Award points for selling a track (Bards Guild only, non-family IP).
-                    if (m_rsm.Owner is PlayerMobile pm &&
-                        pm.NpcGuild == NpcGuild.BardsGuild &&
-                        !m_musicBox.FamilyIP(m_rsm.Owner, from))
-                    {
-                        AwardSkillFameKarma(pm, SalesFactor);
-                    }
-
-                    // the shard hears of every purchase, as it happens (what it paid, for which song, by whom)
-                    AimsHost.Current.OnMusicPurchased(from, m_rsm, mi, m_price);
+                    m_musicBox.RecordSale(from, m_rsm, m_price);
                 }
                 catch (Exception ex)
                 {
@@ -378,6 +330,77 @@ namespace Server.Items
             {
                 // Intentionally no-op.
             }
+        }
+
+        /// <summary>
+        /// A purchase, paid for (BuyMusicBoxPrompt): the buyer joins the song's purchasers and its composer is paid (or
+        /// owed credit), told, and earns sales points; the shard hears of it. An imported song ([MusicImport) pays no
+        /// one: no one here composed it, so its price leaves the economy, unless the shard sends it somewhere
+        /// (AimsHost.OnImportedSale).
+        /// </summary>
+        internal void RecordSale(Mobile from, RolledUpSheetMusic rsm, int price)
+        {
+            MusicInfo mi = MusicLibrary.Repository[rsm];
+
+            if (mi.Purchasers == null)
+                throw new InvalidOperationException("MusicInfo.Purchasers invariant violated.");
+
+            mi.Purchasers.Add(new PurchaserInfo(from, mi.Price));
+
+            // Refresh play queue so the new purchase becomes eligible immediately.
+            if (m_playContext != null)
+                m_playContext.RefreshPlayQueue();
+
+            if (mi.Imported)
+            {
+                // an imported song: counted, but no one is paid, told, or awarded points
+                mi.TotalSales += price;
+                mi.Sold += 1;
+                AimsHost.Current.OnImportedSale(from, rsm, mi, price);
+            }
+            // Now pay the author (or credit if deposit fails).
+            // NOTE: We re-check ContainsKey above and reuse mi to avoid double indexing races.
+            else if (mi.Owner != null)
+            {
+                if (AimsHost.Current.Deposit(mi.Owner, price))
+                {
+                    // Notify the seller via the buyer's notification list (used for later "you sold music" messages).
+                    //  A song the shard holds for someone else (owned by AimsHost.SystemMobile) has no seller here
+                    //  to tell: the host hears of the sale through OnMusicPurchased.
+                    if (m_playContext != null && mi.Owner != AimsHost.Current.SystemMobile)
+                    {
+                        if (m_playContext.PlayerNotificationList != null)
+                            m_playContext.PlayerNotificationList.Add(new YouSoldMusic(mi.Owner, from, rsm, mi));
+                    }
+                }
+                else
+                {
+                    // Bank box can't hold gold: accumulate credit owed (paid at the composer's next music box
+                    //  visit: MusicLibrary.CollectCredits).
+                    mi.Credit += price;
+                }
+
+                mi.TotalSales += price;
+                mi.Sold += 1;
+            }
+            else
+            {
+                // No owner: track becomes free.
+                mi.Price = 0;
+                mi.Sold += 1;
+            }
+
+            // Award points for selling a track (Bards Guild only, non-family IP; not an imported song).
+            if (!mi.Imported &&
+                rsm.Owner is PlayerMobile pm &&
+                pm.NpcGuild == NpcGuild.BardsGuild &&
+                !FamilyIP(rsm.Owner, from))
+            {
+                AwardSkillFameKarma(pm, SalesFactor);
+            }
+
+            // the shard hears of every purchase, as it happens (what it paid, for which song, by whom)
+            AimsHost.Current.OnMusicPurchased(from, rsm, mi, price);
         }
     }
 }

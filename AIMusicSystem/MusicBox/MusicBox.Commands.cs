@@ -20,6 +20,10 @@
 
 /* Scripts\Engines\AIMusicSystem\MusicBox\MusicBox.Commands.cs
  * Changelog
+ *  11/14/26, Adam
+ *      Play, add, remove and buy name their song through PickSong: a name that matches nothing is "I don't know a song
+ *      called '...'"; play, add and remove take the closest of several and say so; buy, which costs gold, considers only
+ *      songs on sale and never guesses (several matches are listed, with serials).
  *  11/8/26, Adam (2026 modernization, 10/29/26 to 11/8/26)
  *      The speech commands as one table: each command's words, help line, gates and handler, so the help list and
  *      TextCommand() can't disagree with the commands. Command words match in any case. Play by title: staff (GM and
@@ -109,7 +113,7 @@ namespace Server.Items
             Cmd(TextCommands.Loop, "loop", "Loop, loop playlist", (b, e, t) => b.HandleLoop()),
             Cmd(TextCommands.List, "list", "List [words | by <composer>], list all tracks, the tracks whose titles have those words, or a composer's tracks", (b, e, t) => b.HandleList(e, t)),
             Cmd(TextCommands.Add, "add", "Add [song], add track (previously removed); Add alone, add music to the music box", (b, e, t) => b.HandleAdd(e, t)),
-            Cmd(TextCommands.Remove, "remove ignore", "Remove, add a global track to the ignore list", (b, e, t) => b.HandleRemove(t)),
+            Cmd(TextCommands.Remove, "remove ignore", "Remove, add a global track to the ignore list", (b, e, t) => b.HandleRemove(e, t)),
             Cmd(TextCommands.Refresh, "refresh", "Refresh, adds any new global (free) tracks to your library", (b, e, t) => b.HandleRefresh()),
             Cmd(TextCommands.Buy, "buy", "Buy, user wishes to buy a track", (b, e, t) => b.HandleBuy(e, t)),
             Cmd(TextCommands.Shuffle, "shuffle", "Shuffle, shuffle users playlist", (b, e, t) => b.HandleShuffle()),
@@ -225,7 +229,7 @@ namespace Server.Items
                 // Play/restart the user's playlist and free global tracks.
                 OnDoubleClick(e.Mobile);
             }
-            else if (TryFindSong(tokens, out RolledUpSheetMusic track, out _))
+            else if (PickSong(e.Mobile, tokens, "play", mustBeOne: false, null, out RolledUpSheetMusic track, out _))
             {
                 // Re-check play context (some flows can change who "owns" the context).
                 RefreshPlayContext(e.Mobile);
@@ -289,10 +293,7 @@ namespace Server.Items
                     Say(string.Format("'{0}' is still pending approval", track), hue: 54);
                 }
             }
-            else
-            {
-                Say(string.Format("I couldn't find '{0}' in your music library", SongName(tokens)), hue: 54);
-            }
+            // else PickSong said why
         }
 
         private void HandleCancel(SpeechEventArgs e)
@@ -454,7 +455,7 @@ namespace Server.Items
                 return;
             }
 
-            if (TryFindSong(tokens, out RolledUpSheetMusic track, out _))
+            if (PickSong(e.Mobile, tokens, "add", mustBeOne: false, null, out RolledUpSheetMusic track, out _))
             {
                 if (track == null || !Approved(track))
                 {
@@ -495,14 +496,11 @@ namespace Server.Items
                     }
                 }
             }
-            else
-            {
-                Say(string.Format("I couldn't find '{0}' in the global music repository.", SongName(tokens)), hue: 54);
-            }
+            // else PickSong said why
         }
 
         // Remove = "hide from my library" via IgnoreList + rebuild queue.
-        private void HandleRemove(string[] tokens)
+        private void HandleRemove(SpeechEventArgs e, string[] tokens)
         {
             string title = SongName(tokens);
             if (string.IsNullOrEmpty(title))
@@ -518,11 +516,8 @@ namespace Server.Items
                 return;
             }
 
-            if (!TryFindSong(tokens, out RolledUpSheetMusic rsm, out _))
-            {
-                Say(string.Format("I could not find {0} in your library.", SongName(tokens)), hue: 54);
-                return;
-            }
+            if (!PickSong(e.Mobile, tokens, "remove", mustBeOne: false, null, out RolledUpSheetMusic rsm, out _))
+                return;     // PickSong said why
 
             if (rsm == null || rsm.Deleted)
             {
@@ -597,11 +592,9 @@ namespace Server.Items
                 return;
             }
 
-            if (!TryFindSong(tokens, out RolledUpSheetMusic rsm, out MusicInfo mi))
-            {
-                Say(string.Format("I couldn't find '{0}' in the global music repository.", SongName(tokens)), hue: 54);
-                return;
-            }
+            // only songs on sale (approved), and never a guess: buying costs gold
+            if (!PickSong(e.Mobile, tokens, "buy", mustBeOne: true, (s, i) => i.Status == SubmissionStatus.Approved, out RolledUpSheetMusic rsm, out MusicInfo mi))
+                return;     // PickSong said why
 
             // Robustness: validate repository entry.
             if (rsm == null || rsm.Deleted || mi == null)

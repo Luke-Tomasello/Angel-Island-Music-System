@@ -20,6 +20,8 @@
 
 /* Scripts\Engines\AIMusicSystem\MusicBox\MusicBox.Playback.cs
  * Changelog
+ *  11/14/26, Adam
+ *      An imported song's plays ([MusicImport) are counted but earn its owner no points: no one here composed it.
  *  11/8/26, Adam (2026 modernization, 10/29/26 to 11/8/26)
  *      Playing: rights, double-click, PlayMusic, play counts, the end of a song, continuing play and status checks.
  *      An unapproved track is announced as pending (or rejected) when it starts, and earns no play credit. A song's end
@@ -336,6 +338,10 @@ namespace Server.Items
 
                 // Award points for having your track played (only for Bard guild players).
                 if (m == null)
+                    return;
+
+                // Not for an imported song ([MusicImport): no one here composed it
+                if (MusicLibrary.Repository.TryGetValue(rsm, out var record) && record != null && record.Imported)
                     return;
 
                 if (owner is not PlayerMobile pm)

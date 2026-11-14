@@ -20,6 +20,12 @@
 
 /* Scripts\Engines\AIMusicSystem\Host\AimsHost.cs
  * Changelog
+ *  11/14/26, Adam (11/11/26 to 11/14/26)
+ *      OnTrackApproved: a submitted track was approved (first approval or remaster), for a shard's own news.
+ *      MusicImportDirectory: where [MusicImport reads song files (default: Data\Music Import). ImportOwner: who owns the
+ *      songs an admin imports, for the library's records only (default: that admin). An imported song pays no one: its
+ *      sales and plays earn its owner nothing (no gold, credit, points or sale notice); OnImportedSale hears each sale,
+ *      for a shard that sends the gold somewhere (default: nothing: it leaves the economy).
  *  11/9/26, Adam (review notice)
  *      ReviewNeeded: songs submitted here await review (every 5 minutes while they do). Default: Administrators are told
  *      "[Music System] New music, review required.", as the library's maintenance always did itself.
@@ -196,6 +202,12 @@ namespace Server
             get { return Path.Combine(AppContext.BaseDirectory, "Data"); }
         }
 
+        /// <summary>Where [MusicImport reads song files (.rzr). Default: the "Music Import" folder in the Data folder.</summary>
+        public virtual string MusicImportDirectory
+        {
+            get { return Path.Combine(DataDirectory, "Music Import"); }
+        }
+
         /// <summary>The shard's Logs folder (MusicEngine.log). Default: Logs beside the server.</summary>
         public virtual string LogsDirectory
         {
@@ -322,6 +334,16 @@ namespace Server
         {
             get { return null; }
         }
+
+        /// <summary>
+        /// Who owns the songs an admin imports ([MusicImport), for the library's records only: an imported song pays no
+        /// one (OnImportedSale). Its composer has no character here; the song keeps its author line. Default: the admin
+        /// who imports them.
+        /// </summary>
+        public virtual Mobile? ImportOwner(Mobile importer)
+        {
+            return importer;
+        }
         #endregion Items
 
         #region Settings
@@ -362,6 +384,24 @@ namespace Server
         /// is (OnMusicSold waits for the composer to be told). Default: nothing.
         /// </summary>
         public virtual void OnMusicPurchased(Mobile buyer, Misc.RolledUpSheetMusic song, Items.MusicLibrary.MusicInfo info, int price)
+        {
+        }
+
+        /// <summary>
+        /// A purchase of an imported song ([MusicImport): it pays no one, since no one here composed it, so the gold leaves
+        /// the economy. A shard that wants it to go somewhere (a town fund, say) sends it there. Called before
+        /// OnMusicPurchased. Default: nothing.
+        /// </summary>
+        public virtual void OnImportedSale(Mobile buyer, Misc.RolledUpSheetMusic song, Items.MusicLibrary.MusicInfo info, int price)
+        {
+        }
+
+        /// <summary>
+        /// A submitted track has just been approved, on the shard that approved it: a first approval, or a remaster that
+        /// replaced the approved track (remaster true; 'info' is the record it took over). For a shard's own news (an
+        /// announcement, a feed). Default: nothing.
+        /// </summary>
+        public virtual void OnTrackApproved(Mobile approver, Misc.RolledUpSheetMusic song, Items.MusicLibrary.MusicInfo info, bool remaster)
         {
         }
 

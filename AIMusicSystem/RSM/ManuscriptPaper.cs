@@ -19,6 +19,12 @@
 
 /* Scripts/Engines/Music/ManuscriptPaper.cs
  * Changelog
+ *  11/14/26, Adam
+ *      Text to sheet music (compile, directives, hash) is one method (Make), shared by a book and a song file
+ *      (SheetFromText, for [MusicImport): a file makes exactly what the same text pasted into a book makes, with no Music
+ *      Karma check and no crediting the one who imports it (a file must name its author), and held to the compiler's
+ *      2,000-line / 64 KB limits itself (a book's pages limit a book; the compiler checks only what it expands). Books
+ *      behave as before.
  *  11/8/26, Adam (2026 modernization, 10/29/26 to 11/8/26)
  *      The book is compiled (MusicCompiler) before it becomes sheet music: sections, plays and repeats are expanded,
  *      and a book without them compiles to itself (same script, same hash); a book with mistakes is refused, page by
@@ -200,6 +206,47 @@ namespace Server.Items
         }
         #endregion Preview
 
+        /// <summary>
+        /// The sheet music a song file's text makes ([MusicImport), owned by 'owner': exactly what the same text pasted
+        /// into a composition book transcribes to (preprocessed, compiled, its directives, its hash: the notes only, so a
+        /// song keeps its hash wherever it goes). Unlike a book: no Music Karma check (staff chose the file), and a file
+        /// that names no author is refused (no one here composed it). Null if it can't be music; 'said' says why.
+        /// </summary>
+        public static RolledUpSheetMusic? SheetFromText(Mobile owner, string text, List<string> said)
+        {
+            // the file's lines, as a book's text: each line, then a new line
+            string[] raw = (text ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+            string book = string.Concat(raw.Select(line => line + Environment.NewLine));
+            if (book.Trim().Length == 0)
+            {
+                said.Add("the file is empty");
+                return null;
+            }
+
+            LocationTarget target = new LocationTarget(null!);
+            string? title = null, author = null;
+            RolledUpSheetMusic? rsm = target.Make(owner, target.PreProcesss(book), target.FileLineWhere(raw), null, ref title, ref author, "the file",
+                composer: false, (hue, line) => said.Add(line));
+
+            // a book's pages limit how long it is; a file has none, and the compiler checks its limits only on a script
+            //  it expands (a plain one compiles to itself): so the file is held to them here
+            if (rsm != null)
+            {
+                string script = rsm.Composition ?? string.Empty;
+                int lines = script.Split(new[] { Environment.NewLine }, StringSplitOptions.None).Length;
+                int bytes = System.Text.Encoding.UTF8.GetByteCount(script);
+                if (lines > MusicCompiler.MaxLines || bytes > MusicCompiler.MaxBytes)
+                {
+                    said.Add(lines > MusicCompiler.MaxLines
+                        ? string.Format("the song is too long: it has more than {0} lines (the longest songs are about 250)", MusicCompiler.MaxLines)
+                        : string.Format("the song is too long: it is more than {0} KB (the longest songs are about 17 KB)", MusicCompiler.MaxBytes / 1024));
+                    rsm.Delete();
+                    return null;
+                }
+            }
+            return rsm;
+        }
+
         public class LocationTarget : Target // Create our targeting class (which we derive from the base target class)
         {
             private ManuscriptPaper m_manuscript;
@@ -284,72 +331,101 @@ namespace Server.Items
                 //  and fix 'book induced wrap'
                 lines = PreProcesss(lines);
 
+                // the directives are read from the book itself, less its section markers (one book: the compiler's source)
+                string? directives = books.Count == 1 ? null : MusicCompiler.WithoutMarkers(PreProcesss(BookText(books[0])));
+                string? title = mcb.Title, author = mcb.Author;
+                RolledUpSheetMusic? rsm = Make(from, lines, LineWhere(books), directives, ref title, ref author, "your music composition book",
+                    composer: true, (hue, text) => { if (hue < 0) from.SendMessage(text); else from.SendMessage(hue, text); });
+                // # Song: and # Author: name the book too, as they always have
+                if (mcb.Title != title)
+                    mcb.Title = title;
+                if (mcb.Author != author)
+                    mcb.Author = author;
+                return rsm;
+            }
+
+            /// <summary>
+            /// Text to sheet music, the steps a composition book and a song file ([MusicImport) share: compiled
+            /// (MusicCompiler: sections, plays and repeats expanded; a script without them compiles to itself), its
+            /// directives read (# Song:, # Author:, # Instrument:, # Price: ...), its hash taken from the notes. 'lines' is
+            /// the text preprocessed (PreProcesss); 'directives' the text they're read from (null: the compiler's source);
+            /// 'title' and 'author' come in as the defaults (a book's own) and go out as the song's. 'what' names the text
+            /// in what's said ("your music composition book"). A composer (a book) needs the Music Karma for sound
+            /// effects, and is credited when the text names no author; a file must name its author. 'say' is told why a
+            /// text can't be music, and anything else worth saying (hue -1: the usual). Null: it can't be music.
+            /// </summary>
+            internal RolledUpSheetMusic? Make(Mobile owner, string lines, IReadOnlyList<string>? where, string? directives,
+                ref string? title, ref string? author, string what, bool composer, Action<int, string> say)
+            {
                 // compile: sections, plays and repeats become the plain script the player plays (a book without them
-                //  is unchanged); the directives are read from the book itself, less its section markers
-                MusicCompiler.Result compiled = MusicCompiler.Compile(lines, LineWhere(books));
+                //  is unchanged)
+                MusicCompiler.Result compiled = MusicCompiler.Compile(lines, where);
                 if (!compiled.Success)
                 {
-                    from.SendMessage(33, "Your music composition book has {0}:", compiled.ErrorCount == 1 ? "a mistake" : compiled.ErrorCount + " mistakes");
+                    say(33, string.Format("{0}{1} has {2}:", char.ToUpper(what[0]), what.Substring(1),
+                        compiled.ErrorCount == 1 ? "a mistake" : compiled.ErrorCount + " mistakes"));
                     foreach (string error in compiled.Errors)
-                        from.SendMessage(33, error);
+                        say(33, error);
                     if (compiled.ErrorCount > compiled.Errors.Count)
-                        from.SendMessage(33, "... and {0} more.", compiled.ErrorCount - compiled.Errors.Count);
+                        say(33, string.Format("... and {0} more.", compiled.ErrorCount - compiled.Errors.Count));
                     return null;
                 }
-                string directives = books.Count == 1 ? compiled.Source : MusicCompiler.WithoutMarkers(PreProcesss(BookText(books[0])));
+                directives ??= compiled.Source;
                 lines = compiled.Text;
 
                 // check for constructs not supported by current music karma
-                if (CheckValidKarma(from, lines) == false)
+                if (composer && CheckValidKarma(owner, lines) == false)
                 {
-                    from.SendMessage("Error: You do not yet have sufficient CoreMusicPlayer Karma to play sound effects.");
+                    say(-1, "Error: You do not yet have sufficient CoreMusicPlayer Karma to play sound effects.");
                     return null;
                 }
 
                 // parse out title, author, instrument
-                string title, author, instrument;
-                int price;
-                bool newTimer, prefetch, napster, concertmode;
-                int tempo;
-                ProcessDirectives(directives, out title, out author, out price, out instrument, out newTimer, out tempo, out prefetch, out napster, out concertmode);
-                // # Song: and # Author: name the song; without them, the book's own title and author do
-                if (!string.IsNullOrEmpty(title))
-                    mcb.Title = title;
-                if (!string.IsNullOrEmpty(author))
-                    mcb.Author = author;
+                ProcessDirectives(directives, out string songTitle, out string songAuthor, out int price, out string instrument, out bool newTimer,
+                    out int tempo, out bool prefetch, out bool napster, out bool concertmode);
+                // # Song: and # Author: name the song; without them, the defaults (a book's own title and author) do
+                if (!string.IsNullOrEmpty(songTitle))
+                    title = songTitle;
+                if (!string.IsNullOrEmpty(songAuthor))
+                    author = songAuthor;
                 // underscores read as spaces ('Alice_In_Chains_-_Rooster', a MIDI file's name that older MidiToAims
                 //  used as the title); the same rule as MidiToAims's DefaultSong
-                if (mcb.Title != null && mcb.Title.Contains('_'))
+                if (title != null && title.Contains('_'))
                 {
-                    mcb.Title = string.Join(" ", mcb.Title.Replace('_', ' ').Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
-                    if (mcb.Title.Length > 0)
-                        from.SendMessage("Underscores in the title read as spaces: {0}.", mcb.Title);
+                    title = string.Join(" ", title.Replace('_', ' ').Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
+                    if (title.Length > 0)
+                        say(-1, string.Format("Underscores in the title read as spaces: {0}.", title));
                 }
 
-                if (mcb.Title == null || mcb.Title.Length == 0 || mcb.Title.ToLower() == "title")
+                if (title == null || title.Length == 0 || title.ToLower() == "title")
                 {
-                    from.SendMessage("your music composition book must have a title.");
+                    say(-1, what + " must have a title.");
                     return null;
                 }
                 // no author (or the book's placeholder, or MidiToAims's own name, which older MidiToAims wrote when
-                //  "Arranged by" was blank): the one transcribing it is its author
-                if (mcb.Author == null || mcb.Author.Trim().Length == 0 || mcb.Author.Trim().ToLower() == "author"
-                    || mcb.Author.Trim().Equals("MidiToAims", StringComparison.OrdinalIgnoreCase))
+                //  "Arranged by" was blank): the one transcribing it is its author; a file names its own, or is refused
+                if (author == null || author.Trim().Length == 0 || author.Trim().ToLower() == "author"
+                    || author.Trim().Equals("MidiToAims", StringComparison.OrdinalIgnoreCase))
                 {
-                    mcb.Author = from.Name;
-                    from.SendMessage("The book names no author: you are credited as its author ({0}).", from.Name);
+                    if (!composer)
+                    {
+                        say(-1, what + " names no author (# Author:).");
+                        return null;
+                    }
+                    author = owner.Name;
+                    say(-1, string.Format("The book names no author: you are credited as its author ({0}).", owner.Name));
                 }
                 if (price > 0 && napster == true)
                 {
-                    from.SendMessage("You cannot charge for Napster music.");
+                    say(-1, "You cannot charge for Napster music.");
                     return null;
                 }
 
-                RolledUpSheetMusic rsm = new RolledUpSheetMusic(from, TonalQuality(instrument), mcb.Author, mcb.Title, price, lines);
+                RolledUpSheetMusic rsm = new RolledUpSheetMusic(owner, TonalQuality(instrument), author, title, price, lines);
                 rsm.HashCode = CompileHashCode(lines, false);
                 rsm.SongBytes = null;
-                rsm.SongName = mcb.Title;
-                rsm.Author = mcb.Author;
+                rsm.SongName = title;
+                rsm.Author = author;
                 rsm.ConfigureInstrument(instrument);
                 rsm.NewTimer = newTimer;
                 rsm.Tempo = tempo;
@@ -357,6 +433,22 @@ namespace Server.Items
                 rsm.Napster = napster;
                 rsm.ConcertMode = concertmode;
                 return rsm;
+            }
+
+            // where each line of a song file is ("line 12"), for the compiler's messages: as a book's (LineWhere), a
+            //  line continuing the one before (CheckBookWrap) is part of it; empty lines are dropped
+            internal List<string> FileLineWhere(string[] raw)
+            {
+                List<string> where = new List<string>();
+                for (int ix = 0; ix < raw.Length; ix++)
+                {
+                    string line = RemoveLoop(raw[ix] ?? string.Empty);
+                    if (line.Trim().Length == 0)
+                        continue;
+                    if (where.Count == 0 || !CheckBookWrap(line))
+                        where.Add(string.Format("line {0}", ix + 1));
+                }
+                return where;
             }
 
             private static string BookText(MusicCompositionBook book)
@@ -485,7 +577,7 @@ namespace Server.Items
                 return Regex.Replace(lines, "#*loop", string.Empty, RegexOptions.IgnoreCase);
             }
 
-            string PreProcesss(string lines)
+            internal string PreProcesss(string lines)
             {
                 // normalize input
                 lines = NormalizeString(lines);

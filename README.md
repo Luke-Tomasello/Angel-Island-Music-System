@@ -172,6 +172,10 @@ namespace Server
 | `TrackNote` | A note about a track when someone asks (`who`, staff `find`) | None |
 | `RefuseSubmission` | Your own rule for refusing a submission or remaster, with its reason | Nothing refused |
 | `ReviewNeeded` | Songs await review (every 5 minutes while they do): who hears of it | Administrators: "New music, review required." |
+| `OnTrackApproved` | A song was just approved (first approval or remaster), for your own news | Nothing |
+| `MusicImportDirectory` | Where `[MusicImport` reads song files | `Data\Music Import` |
+| `ImportOwner` | Who owns imported songs, for the library's records (they pay no one) | The admin who imports them |
+| `OnImportedSale` | A sale of an imported song: send the gold somewhere, if you like | Nothing: the gold leaves the economy |
 
 Angel Island's own host, `AngelIslandAimsHost`, wires all of these to its systems: it's a complete example of what a
 shard can connect (in the Angel Island Server repository, `scripts/Engines/AIMusicHost`).
@@ -185,6 +189,34 @@ shard can connect (in the Angel Island Server repository, `scripts/Engines/AIMus
 | `Saves\AIMS\Players.bin` | Music Karma and `[FilterMusic`, when your host doesn't keep them |
 | `Logs\MusicEngine.log` | Playback measurements (turn off with `MusicEngineLog`) |
 | `Logs\MusicCredits.log` | Credit paid to composers, and credit forfeited (a deleted character, or a library moved from another shard: credit is paid only where it was earned) |
+| `Data\Music Import\` | Song files (`.rzr`) for `[MusicImport` to read; left there after |
+| `Logs\MusicImport.log` | What each `[MusicImport` did with each file |
+
+## Importing songs
+
+The [Angel Island Music Library](https://game-master.net/AimsMusic.html) shares every song its players have
+composed, free. To bring them into your shard's music boxes:
+
+1. On the library page, **Download all**, and unzip it into your server's `Data\Music Import` folder.
+2. In game, as an Administrator, type `[MusicImport`.
+
+Each file becomes a song exactly as its text pasted into a music composition book would: its title, author,
+instrument and settings come from its `# Song:`, `# Author:` and other lines. Then:
+
+- **New songs** join the library, approved, at the price in the file (`# Price:`, Angel Island's suggestion).
+  `[MusicImport free` adds them all free. Either way the prices are yours: change any afterwards.
+- **Songs you already have** (the same notes) are left as they are, so running it again is safe.
+- **A new version** of a song you imported before (the same title and author, other notes) replaces it and keeps its
+  record: its sales, buyers and price.
+- **Files that can't be songs** are refused, with the reason: they don't compile, are too long, or name no author.
+
+You're told the totals ("12 added, 117 already in the library, 1 updated, 0 refused"), and `Logs\MusicImport.log`
+has every file's outcome. The files can be any `.rzr` song file, not only the library's.
+
+**Imported songs pay no one.** No one on your shard composed them, so their sales and plays earn no one gold, credit,
+Music Karma or points: the price a player pays leaves the economy, a gold sink. To send it somewhere instead (a town
+fund, say), override `OnImportedSale` in your host. The songs belong to the admin who imports them, for the library's
+records only (`ImportOwner`).
 
 ## Troubleshooting
 
@@ -228,6 +260,8 @@ They describe Angel Island's settings: prices, Music Karma and who reviews songs
 - The 2022 [Battle of the Bards](https://www.youtube.com/watch?v=GCqLpk5YO1c), where Angel Island's composers shared
   their work
 - [Ultima Online Free Shard](https://www.youtube.com/@UltimaOnlineFreeShard) on YouTube
+- The [Angel Island Music Library](https://game-master.net/AimsMusic.html): every song approved on Angel Island's
+  shards, free to download one at a time or all at once ([Importing songs](#importing-songs))
 - The music library of Angel Island's shards, shared with its composers' permission, is in the Angel Island Server
   repository (`AI Music Composer/Data`, one folder per composer): songs by Galois, Angel Island's Grandmaster
   Composer, Jocelyn, Bushwick Bill, Pastor Wydstrin, Bravado, Loser Girl, Willibald, Xavier, Lady Runa and a sheep

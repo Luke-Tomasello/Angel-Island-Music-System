@@ -20,6 +20,12 @@
 
 /* Scripts\Engines\AIMusicSystem\MusicBox\MusicBox.StaffCommands.cs
  * Changelog
+ *  11/14/26, Adam
+ *      Approve, deny and delete name their song through PickSong and never guess: several matches are listed, with
+ *      serials, and nothing is done; a name that matches nothing is said so (it matched any title sharing a letter or two:
+ *      "delete clip", with the clip already gone, deleted Axel F). Approve and deny consider only songs waiting for
+ *      review (deny rejected approved songs too). Deleting one song, by name or serial, asks first, naming it ("Type
+ *      Delete"), as 'delete *' does (ConfirmAll's single).
  *  11/8/26, Adam (2026 modernization, 10/29/26 to 11/8/26)
  *      The staff and Test Center speech commands (flushall, review, approve, deny, delete, find, dupe), each its old
  *      case of the OnSpeech switch; the command table checks the staff level first. Review announces a pending track
@@ -40,6 +46,7 @@ using Server.Misc;
 using Server.Prompts;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using static Server.Items.MusicLibrary;
 
 namespace Server.Items
@@ -137,24 +144,14 @@ namespace Server.Items
             }
             else
             {
-                if (!TryFindSong(tokens, out RolledUpSheetMusic rsm, out _))
-                {
-                    Say(string.Format("I couldn't find '{0}' in the global music repository.", SongName(tokens)), hue: 54);
-                }
-                else
-                {
-                    if (rsm == null || rsm.Deleted)
-                        return;
+                // only songs waiting for review, and never a guess
+                if (!PickSong(e.Mobile, tokens, "approve", mustBeOne: true, (s, i) => i.Status == SubmissionStatus.Pending,
+                    out RolledUpSheetMusic rsm, out _, none: "No song waiting for review is called '{0}'."))
+                    return;     // PickSong said why
 
-                    if (!Approved(rsm))
-                    {
-                        ApproveTrack(e.Mobile, rsm);
-                    }
-                    else
-                    {
-                        SendMessage(e.Mobile, "That track has already been approved.");
-                    }
-                }
+                if (rsm == null || rsm.Deleted)
+                    return;
+                ApproveTrack(e.Mobile, rsm);
             }
         }
 
@@ -176,11 +173,10 @@ namespace Server.Items
             }
             else
             {
-                if (!TryFindSong(tokens, out RolledUpSheetMusic rsm, out _))
-                {
-                    Say(string.Format("I couldn't find '{0}' in the global music repository.", SongName(tokens)), hue: 54);
-                    return;
-                }
+                // only songs waiting for review (it rejected approved songs too), and never a guess
+                if (!PickSong(e.Mobile, tokens, "deny", mustBeOne: true, (s, i) => i.Status == SubmissionStatus.Pending,
+                    out RolledUpSheetMusic rsm, out _, none: "No song waiting for review is called '{0}'."))
+                    return;     // PickSong said why
 
                 if (rsm == null)
                     return;
@@ -236,17 +232,20 @@ namespace Server.Items
             }
             else
             {
-                if (!TryFindSong(tokens, out RolledUpSheetMusic rsm, out _))
-                {
-                    Say(string.Format("I couldn't find '{0}' in the global music repository.", SongName(tokens)), hue: 54);
-                    return;
-                }
+                // never a guess
+                if (!PickSong(e.Mobile, tokens, "delete", mustBeOne: true, null, out RolledUpSheetMusic rsm, out _))
+                    return;     // PickSong said why
 
                 if (rsm != null)
                     list.Add(rsm);
             }
 
-            DeleteTracks(e.Mobile, list);
+            // and only once staff confirm, naming the song (Esc, or anything but Delete, cancels)
+            if (list.Count == 0)
+                return;
+            RolledUpSheetMusic one = list[0];
+            ConfirmAll(e.Mobile, "Delete", "deleted", list, (from, tracks) => DeleteTracks(from, tracks.Where(t => t != null && !t.Deleted).ToList()),
+                single: string.Format("'{0}' by {1} (0x{2:X})", one, one.Author, one.Serial.Value));
         }
 
         private void DeleteTracks(Mobile from, List<RolledUpSheetMusic> list)
@@ -287,10 +286,11 @@ namespace Server.Items
                 && info != null && info.Status == SubmissionStatus.Pending;
         }
 
-        // 'approve *', 'deny *', 'delete *': says how many songs, and acts only when staff type the command's word
-        //  (Esc, or anything else, cancels). The act checks each song again: things may change while staff type.
+        // 'approve *', 'deny *', 'delete *' (and deleting one song: 'single' names it): says how many songs, and acts only
+        //  when staff type the command's word (Esc, or anything else, cancels). The act checks each song again: things
+        //  may change while staff type.
         private void ConfirmAll(Mobile from, string verb, string done, List<RolledUpSheetMusic> tracks,
-            Action<Mobile, List<RolledUpSheetMusic>> act)
+            Action<Mobile, List<RolledUpSheetMusic>> act, string? single = null)
         {
             bool all = verb == "Delete";
             if (tracks.Count == 0)
@@ -298,9 +298,13 @@ namespace Server.Items
                 SendMessage(from, all ? "There are no songs in the music library." : "There are no songs waiting for review.");
                 return;
             }
-            SendMessage(from, string.Format("You are about to {0} {1} song{2}{3}. Type {4} to continue, or Esc to cancel.",
-                verb.ToLowerInvariant(), tracks.Count, tracks.Count == 1 ? "" : "s",
-                all ? " (every song in the music library)" : " waiting for review", verb));
+            if (single != null)
+                SendMessage(from, string.Format("You are about to {0} {1}. Type {2} to continue, or Esc to cancel.",
+                    verb.ToLowerInvariant(), single, verb));
+            else
+                SendMessage(from, string.Format("You are about to {0} {1} song{2}{3}. Type {4} to continue, or Esc to cancel.",
+                    verb.ToLowerInvariant(), tracks.Count, tracks.Count == 1 ? "" : "s",
+                    all ? " (every song in the music library)" : " waiting for review", verb));
             from.Prompt = new ConfirmAllPrompt(this, verb, done, tracks, act);
         }
 

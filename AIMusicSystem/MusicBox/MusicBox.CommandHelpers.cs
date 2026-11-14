@@ -20,6 +20,8 @@
 
 /* Scripts\Engines\AIMusicSystem\MusicBox\MusicBox.CommandHelpers.cs
  * Changelog
+ *  11/11/26, Adam
+ *      ApproveTrack tells the host once the track is approved (AimsHost.OnTrackApproved, first approval or remaster).
  *  11/8/26, Adam (2026 modernization, 10/29/26 to 11/8/26)
  *      Helpers for the speech commands: filters, CompositeList, rights and approval, stopping and samples, submission
  *      status, SongName. Approving a remaster deletes the track it replaces (PatchV262 deletes the ones left before);
@@ -316,6 +318,7 @@ namespace Server.Items
 
                 // No points and do not alter original publish date for remasters (per original intent).
                 from.SendMessage("You approve the remastered track {0}.", rsm);
+                AimsHost.Current.OnTrackApproved(from, rsm, MusicLibrary.Repository[rsm], remaster: true);
             }
             else
             {
@@ -336,6 +339,7 @@ namespace Server.Items
                 MusicLibrary.Repository[rsm].DateApproved = DateTime.UtcNow;
 
                 from.SendMessage("You approve the track {0}.", rsm);
+                AimsHost.Current.OnTrackApproved(from, rsm, MusicLibrary.Repository[rsm], remaster: false);
             }
         }
         /// <summary>

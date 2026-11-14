@@ -220,12 +220,6 @@ records only (`ImportOwner`).
 
 ## Troubleshooting
 
-### Houses are the wrong size, or you drop through the floor
-
-Not AIMS, but you'll meet it placing a music box. `multi.mul` changed format with the High Seas client (7.0.9.0). In
-`Scripts\Misc\MapDefinitions.cs`, `MultiComponentList.PostHSFormat` must match your client files: `false` for files
-from before 7.0.9.0, `true` from then on. Stock RunUO 2.6 says `true`.
-
 ### "Staff cannot buy music on the production shard"
 
 Staff can only buy music on a Test Center. Test with a player account, or override `IsTestCenter`.

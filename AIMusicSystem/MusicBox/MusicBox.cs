@@ -19,6 +19,9 @@
 
 /* Scripts\Engines\AIMusicSystem\MusicBox\MusicBox.cs
  * Changelog
+ *  11/16/26, Adam (song renames)
+ *      GMLHasTrackID finds a renamed song by a name it had too (MusicLibrary.SameTrack): its composer's remaster from a
+ *      book with the old name is found, and the same book can't add it again as a new song.
  *  11/5/26, Adam (2026 modernization: the music box cleanup, 10/29/26 to 11/5/26)
  *      MusicBox is a partial class in several files (ContextMenus, PlayContext, Playback, Speech, Commands,
  *      StaffCommands, CommandHelpers, Prompts, Notifications, Placement); the library moved to Library\MusicLibrary.cs.
@@ -190,12 +193,12 @@ namespace Server.Items
                 if (MusicLibrary.Repository.Count == 0)
                     return false;
 
-                // Iterate repository keys and look for a matching TrackID.
-                // Fail fast on first match.
+                // Iterate repository keys and look for a matching TrackID (by the track's name now, or a name it had
+                //  before it was renamed). Fail fast on first match.
                 foreach (var kvp in MusicLibrary.Repository)
                 {
                     // Defensive: kvp.Key may theoretically be null depending on how the repository is built.
-                    if (kvp.Key != null && kvp.Key.TrackID == trackID)
+                    if (kvp.Key != null && MusicLibrary.SameTrack(kvp.Key, kvp.Value, trackID))
                         return true;
                 }
 

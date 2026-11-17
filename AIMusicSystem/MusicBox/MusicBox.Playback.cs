@@ -20,6 +20,9 @@
 
 /* Scripts\Engines\AIMusicSystem\MusicBox\MusicBox.Playback.cs
  * Changelog
+ *  11/14/26, Adam (arranged by; the composer's account)
+ *      A pending or rejected track is announced with its arranger, when it has one (By). No play credit for playing
+ *      your own track from any character of your account (IsComposer).
  *  11/14/26, Adam
  *      An imported song's plays ([MusicImport) are counted but earn its owner no points: no one here composed it.
  *  11/8/26, Adam (2026 modernization, 10/29/26 to 11/8/26)
@@ -248,7 +251,7 @@ namespace Server.Items
 
                 // An unapproved track (its submitter's pending track, or staff listening) says so to everyone in earshot.
                 if (!Approved(rsm))
-                    Say(string.Format("{0} by {1} ({2}).", rsm, rsm.Author, Rejected(rsm) ? "rejected" : "pending approval"), hue: 54);
+                    Say(string.Format("{0} by {1} ({2}).", rsm, By(rsm), Rejected(rsm) ? "rejected" : "pending approval"), hue: 54);
 
                 // Try to animate, but do not let animation failure break playback.
                 try
@@ -316,8 +319,8 @@ namespace Server.Items
                 if (owner == null)
                     return;
 
-                // You don't get 'play' credits for playing your own music.
-                if (m == owner)
+                // You don't get 'play' credits for playing your own music (from any character of your account).
+                if (m == owner || IsComposer(m, rsm, null))
                     return;
 
                 // Nor for a track not yet approved (staff listening to a pending or rejected track).

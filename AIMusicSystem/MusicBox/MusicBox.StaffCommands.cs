@@ -20,6 +20,8 @@
 
 /* Scripts\Engines\AIMusicSystem\MusicBox\MusicBox.StaffCommands.cs
  * Changelog
+ *  11/14/26, Adam (arranged by)
+ *      Review names a track's arranger, when it has one (By).
  *  11/14/26, Adam
  *      Approve, deny and delete name their song through PickSong and never guess: several matches are listed, with
  *      serials, and nothing is done; a name that matches nothing is said so (it matched any title sharing a letter or two:
@@ -115,7 +117,7 @@ namespace Server.Items
                 SendMessage(e.Mobile, 33, string.Format("Warning: {0} by {1} has no Owner.", rsm.Title, rsm.Author));
 
             if (Approved(rsm))  // an unapproved track (the usual case here) is announced by PlayMusic, as pending
-                Say(string.Format("{0} by {1}.", rsm.Title, rsm.Author), hue: 54);
+                Say(string.Format("{0} by {1}.", rsm.Title, By(rsm)), hue: 54);
 
             if (m_playContext == null)
                 return;

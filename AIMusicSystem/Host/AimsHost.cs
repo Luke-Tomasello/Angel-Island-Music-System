@@ -20,6 +20,10 @@
 
 /* Scripts\Engines\AIMusicSystem\Host\AimsHost.cs
  * Changelog
+ *  11/14/26, Adam (arranged by)
+ *      Arranger: who arranged a library track, named after its author ("by Alice in Chains, arranged by Gud'Gul").
+ *      Default: its owner, the one paid for it, when the Author names someone else (not for an imported track, or one
+ *      SystemMobile holds). SameName and PlainName: names compared trimmed, spaces collapsed, any case.
  *  11/14/26, Adam (11/11/26 to 11/14/26)
  *      OnTrackApproved: a submitted track was approved (first approval or remaster), for a shard's own news.
  *      MusicImportDirectory: where [MusicImport reads song files (default: Data\Music Import). ImportOwner: who owns the
@@ -412,6 +416,35 @@ namespace Server
         public virtual string? TrackNote(Mobile viewer, Misc.RolledUpSheetMusic song, Items.MusicLibrary.MusicInfo? info)
         {
             return null;
+        }
+
+        /// <summary>
+        /// Who arranged this library track, named after its author ("Rooster by Alice in Chains, arranged by Gud'Gul"):
+        /// the Author is credit text, while the gold from its sales goes to its owner, the one who made the sheet music.
+        /// Default: the owner's name, unless the Author already is it (any case and spacing), the Author is blank, the track
+        /// has no owner (or it is gone, or it is SystemMobile, holding it), or it was imported ([MusicImport: its owner only
+        /// keeps the record). Null: no arranger is named. Override to name someone else, or no one.
+        /// </summary>
+        public virtual string? Arranger(Misc.RolledUpSheetMusic song, Items.MusicLibrary.MusicInfo? info)
+        {
+            if (song == null || info == null || info.Imported || string.IsNullOrWhiteSpace(song.Author))
+                return null;
+            Mobile? owner = info.Owner;
+            if (owner == null || owner.Deleted || owner == SystemMobile || string.IsNullOrWhiteSpace(owner.Name) || SameName(owner.Name, song.Author))
+                return null;
+            return PlainName(owner.Name);
+        }
+
+        /// <summary>Two names are the same name: trimmed, runs of spaces as one, any letter case.</summary>
+        public static bool SameName(string? a, string? b)
+        {
+            return string.Equals(PlainName(a), PlainName(b), StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>A name trimmed, with runs of spaces as one.</summary>
+        public static string PlainName(string? name)
+        {
+            return string.Join(" ", (name ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries));
         }
 
         /// <summary>

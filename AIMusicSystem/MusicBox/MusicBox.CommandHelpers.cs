@@ -20,6 +20,14 @@
 
 /* Scripts\Engines\AIMusicSystem\MusicBox\MusicBox.CommandHelpers.cs
  * Changelog
+ *  11/16/26, Adam (11/14/26 to 11/16/26: the composer's account, song renames)
+ *      IsComposer: a track's composer is the character who owns it, or any character of the composer's account (the
+ *      record's OwnerGUID). A track held for its composer on a shard that isn't its home (owned by SystemMobile) played
+ *      only a sample for the composer and sold to them (seen 11/14/26: Galois on Siege). Full play, Napster access and
+ *      pending play go through it.
+ *      A remaster of a renamed track is found by a name the track had too (MusicLibrary.SameTrack), and takes the
+ *      track's name now (MusicLibrary.SetNames: title, author, its notes' '# Song:' line), so a remaster from a book with
+ *      the old name doesn't undo the rename.
  *  11/11/26, Adam
  *      ApproveTrack tells the host once the track is approved (AimsHost.OnTrackApproved, first approval or remaster).
  *  11/8/26, Adam (2026 modernization, 10/29/26 to 11/8/26)
@@ -204,13 +212,28 @@ namespace Server.Items
 
             foreach (KeyValuePair<RolledUpSheetMusic, MusicInfo> kvp in MusicLibrary.Repository)
                 if (kvp.Key == rsm)
-                    if (kvp.Key.Owner == m)
+                    if (IsComposer(m, kvp.Key, kvp.Value))
                         return true;            // owner/composer
                     else
                         foreach (PurchaserInfo lml in kvp.Value.Purchasers)
                             if (lml.Purchaser == m)
                                 return true;    // bought it
             return false;
+        }
+        // the composer of a library track: the character who owns it, or any character of the composer's account (its
+        //  record's OwnerGUID). A track held for its composer (another shard's song, owned by the host's SystemMobile),
+        //  or made by another of their characters, is still theirs: it plays in full, costs them nothing, and earns them
+        //  no play credit.
+        public static bool IsComposer(Mobile? m, RolledUpSheetMusic? rsm, MusicInfo? info)
+        {
+            if (m == null)
+                return false;
+            if ((rsm != null && rsm.Owner == m) || (info != null && info.Owner == m))
+                return true;
+            if (info == null && rsm != null)
+                MusicLibrary.Repository.TryGetValue(rsm, out info);
+            uint guid = info?.OwnerGUID ?? 0;
+            return guid != 0 && guid == AimsHost.Current.AccountGuid(m);
         }
         public bool HasNapsterAccess(Mobile m, RolledUpSheetMusic rsm)
         {
@@ -222,7 +245,7 @@ namespace Server.Items
                         return false;
                     else if (CheckEmbedded())
                         return true;
-                    else if (rsm.Owner == m)
+                    else if (IsComposer(m, rsm, null))
                         return true;    // the composer
 
                     foreach (PurchaserInfo lml in MusicLibrary.Repository[rsm].Purchasers)
@@ -287,7 +310,7 @@ namespace Server.Items
                 if (existing == null || info == null || ReferenceEquals(existing, rsm))
                     continue;
 
-                if (info.Status == SubmissionStatus.Approved && existing.TrackID == trackID)
+                if (info.Status == SubmissionStatus.Approved && MusicLibrary.SameTrack(existing, info, trackID))
                 {
                     remasterTarget = existing;
                     remasterInfo = info;
@@ -308,6 +331,10 @@ namespace Server.Items
                     remasterTarget.Delete();
 
                 MusicLibrary.Repository[rsm] = remasterInfo;
+
+                // The library's name for the track now: a remaster from a book with a name it had before it was
+                //  renamed doesn't undo the rename.
+                MusicLibrary.SetNames(rsm, remasterTarget.Title ?? "", remasterTarget.Author ?? "");
 
                 // Mark remaster metadata.
                 MusicLibrary.Repository[rsm].DateRemastered = DateTime.UtcNow;
@@ -489,11 +516,12 @@ namespace Server.Items
         {
             return Status(rsm, SubmissionStatus.Pending);
         }
-        // A track m may have in their play list: approved, or pending and m submitted it (the sheet's Owner, the character
-        //  who made it, not the Author text). A rejected track is not. Staff hear any track by title (HandlePlay).
+        // A track m may have in their play list: approved, or pending and m submitted it (IsComposer: the character who
+        //  made it, or another of their account's; not the Author text). A rejected track is not. Staff hear any track by
+        //  title (HandlePlay).
         private bool Playable(Mobile m, RolledUpSheetMusic rsm)
         {
-            return Approved(rsm) || (PendingReview(rsm) && rsm.Owner != null && rsm.Owner == m);
+            return Approved(rsm) || (PendingReview(rsm) && IsComposer(m, rsm, null));
         }
         /// <summary>
         /// Determines whether the specified RolledUpSheetMusic exists in the

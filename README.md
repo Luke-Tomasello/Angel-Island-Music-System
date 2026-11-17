@@ -116,11 +116,14 @@ Do these in order. Each one says what you should see.
 6. **Set up a music box.** Lock a music box down in your house, single-click it and rename it (Angel Island's is
    *Alexa*). Say `Alexa, help`: it lists its commands.
 7. **Publish.** Say `Alexa, submit` and target your sheet music. Staff of Administrator level and up are told a new song
-   needs review; it plays on your own box meanwhile, marked as pending approval.
+   needs review; it plays on your own box meanwhile, marked as pending approval. The box calls it *Test Song by You,
+   arranged by* your character: `# Author:` is credit, and the gold goes to whoever made the sheet music, so when the
+   two differ the box names both.
 8. **Review it.** As an Owner, say `Alexa, review` (it plays the song), then `Alexa, approve test` (or `deny`).
 9. **Sell it.** A player on a **second account** puts gold in their bank, says `Alexa, play test` (a 10-second
    sample), then `Alexa, buy test`. The price leaves the buyer's bank and lands in the composer's, and the song now
-   plays in full for the buyer.
+   plays in full for the buyer. Or browse: `Alexa, library` (or the box's **Look At**) shows every song in a window,
+   with play, buy and stop buttons; anyone near the box may look, but playing and buying need house access.
 10. **Check the books.** The buyer says `Alexa, purchases`; the composer says `Alexa, sales`.
 11. **Record a performance.** Say `[MusicRecorder start`, play a few `[play` lines and say a lyric, then
     `[MusicRecorder stop` and target a composition book: your performance is in the book, with the pauses.
@@ -170,6 +173,7 @@ namespace Server
 | `OnMusicSold`, `HasLeaderboard` | A sale, for your leaderboard; and whether to tell the composer to check it | Nothing; no |
 | `OnMusicPurchased` | Every purchase as it happens: buyer, song, price paid | Nothing |
 | `TrackNote` | A note about a track when someone asks (`who`, staff `find`) | None |
+| `Arranger` | Who arranged a track, named after its author ("by Beethoven, arranged by Galois") | Its owner, when the Author names someone else (not imported songs) |
 | `RefuseSubmission` | Your own rule for refusing a submission or remaster, with its reason | Nothing refused |
 | `ReviewNeeded` | Songs await review (every 5 minutes while they do): who hears of it | Administrators: "New music, review required." |
 | `OnTrackApproved` | A song was just approved (first approval or remaster), for your own news | Nothing |

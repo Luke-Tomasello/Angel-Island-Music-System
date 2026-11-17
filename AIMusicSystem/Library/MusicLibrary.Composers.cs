@@ -20,6 +20,9 @@
 
 /* Scripts\Engines\AIMusicSystem\Library\MusicLibrary.Composers.cs
  * Changelog
+ *  11/16/26, Adam (song renames)
+ *      Composers hear of a renamed song once too ("Your song 'X' is now listed in the music library as 'Y'.", with
+ *      staff's note), at their next music box visit (TellComposer) or in 'status', whatever the song's status.
  *  11/8/26, Adam (2026 modernization, 10/29/26 to 11/8/26)
  *      The library's composers, moved out of MusicBox unchanged but for the names: the scoring factors, reconnecting a
  *      player's music ownership (ReconnectPlayer), music karma (GetMusicKarma), publishing points and sales figures.
@@ -700,8 +703,17 @@ namespace Server.Items
                 foreach (KeyValuePair<RolledUpSheetMusic, MusicInfo> kvp in Repository)
                 {
                     MusicInfo info = kvp.Value;
-                    if (kvp.Key == null || kvp.Key.Deleted || info == null || info.Owner != m || info.ComposerTold
-                        || info.Status == SubmissionStatus.Pending)
+                    if (kvp.Key == null || kvp.Key.Deleted || info == null || info.Owner != m)
+                        continue;
+
+                    // renamed (any status): told once, with staff's note
+                    if (info.RenameNews)
+                    {
+                        m.SendMessage(54, RenameNews(kvp.Key, info));
+                        info.RenameNews = false;
+                    }
+
+                    if (info.ComposerTold || info.Status == SubmissionStatus.Pending)
                         continue;
 
                     if (info.Status == SubmissionStatus.Approved)
@@ -742,6 +754,11 @@ namespace Server.Items
             foreach (KeyValuePair<RolledUpSheetMusic, MusicInfo> kvp in mine)
             {
                 MusicInfo info = kvp.Value;
+                if (info.RenameNews)
+                {   // the rename first, so the line after it names the song as the library does now
+                    lines.Add(RenameNews(kvp.Key, info));
+                    info.RenameNews = false;
+                }
                 switch (info.Status)
                 {
                     case SubmissionStatus.Pending:
@@ -760,6 +777,13 @@ namespace Server.Items
                 }
             }
             return lines;
+        }
+
+        /// <summary>A renamed song, for its composer: the title they knew, the library's now, and staff's note.</summary>
+        public static string RenameNews(RolledUpSheetMusic song, MusicInfo info)
+        {
+            string text = string.Format("Your song '{0}' is now listed in the music library as '{1}'.", info.RenamedFrom ?? "?", song);
+            return info.RenameNote == null ? text : text + " " + Sentence(info.RenameNote);
         }
 
         /// <summary>Why a song wasn't approved, for its composer: the reason, then staff's note if there is one.</summary>

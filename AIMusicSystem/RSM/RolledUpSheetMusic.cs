@@ -19,6 +19,9 @@
 
 /* Scripts/Engines/AIMusicSystem/RSM/RolledUpSheetMusic.cs
  * Changelog
+ *  11/16/26, Adam (song renames)
+ *      TrackIDOf: the TrackID a sheet would have with another title and author, for a renamed song's former names
+ *      (MusicLibrary.SameTrack). TrackID itself is unchanged.
  *  11/8/26, Adam (2026 modernization, 10/25/26 to 11/8/26)
  *      Laid out for reading. [Dupe copies the whole sheet (it made a blank one) and the copy plays itself; a sheet
  *      without a composition plays nothing (HasComposition). GenHashCode no longer leaves a stray ManuscriptPaper in
@@ -135,13 +138,13 @@ namespace Server.Misc
         }
 
         // the track as a title by an author for an owner (a remaster keeps it; its HashCode differs)
-        public int TrackID
+        public int TrackID => TrackIDOf(m_title, Author, Owner);
+
+        // the TrackID of a sheet with this title, author and owner (a renamed song's former names: MusicLibrary.SameTrack)
+        public static int TrackIDOf(string? title, string? author, Mobile? owner)
         {
-            get
-            {
-                string text = (m_title ?? "") + (Author ?? "") + (Owner != null ? AimsHost.Current.AccountGuid(Owner).ToString() : "");
-                return AimsUtil.GetStableHashCode(text.Replace(" ", "").ToLower());
-            }
+            string text = (title ?? "") + (author ?? "") + (owner != null ? AimsHost.Current.AccountGuid(owner).ToString() : "");
+            return AimsUtil.GetStableHashCode(text.Replace(" ", "").ToLower());
         }
 
         // Sheets with the same song are the same track: the music library (a Dictionary keyed by sheet) and the play

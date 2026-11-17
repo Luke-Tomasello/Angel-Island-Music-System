@@ -20,6 +20,10 @@
 
 /* Scripts\Engines\AIMusicSystem\MusicBox\MusicBox.Speech.cs
  * Changelog
+ *  11/15/26, Adam (the library)
+ *      'library' (or 'browse') is answered for anyone near the box, with or without access: the window only shows the
+ *      songs (its buttons check access). It opens before the play context is taken for the speaker, so a visitor's
+ *      look doesn't touch the owner's music.
  *  11/8/26, Adam (2026 modernization, 10/29/26 to 11/8/26)
  *      The speech interface: OnSpeech dispatches through the command table (MusicBox.Commands.cs; staff commands in
  *      MusicBox.StaffCommands.cs).
@@ -81,6 +85,7 @@ namespace Server.Items
             Sales,          // total composers sales
             Purchases,      // player purchases
             Status,         // a composer's songs (review results) and sales
+            Library,        // the library window (anyone may look: MusicBox.LibraryGump.cs)
             #endregion  player issued commands
 
             Unknown = 100,  // unknown command
@@ -194,8 +199,8 @@ namespace Server.Items
                 wasNamed = true;
 
                 // The speaker must have rights here (where the box is: MusicBox.Placement.cs; a box in a container
-                //  has none).
-                if (CheckRights(e.Mobile, message: false) != Rights.okay)
+                //  has none), except to look at the library: anyone may (MusicBox.LibraryGump.cs)
+                if (CheckRights(e.Mobile, message: false) != Rights.okay && TextCommand(tokens) != TextCommands.Library)
                     return false;
 
                 // Validate that the remainder of the speech resolves to a known text command.
@@ -269,6 +274,14 @@ namespace Server.Items
 
                 // A composer using a music box collects credit owed from earlier sales (before "sales" reports it).
                 MusicLibrary.ComposerVisit(e.Mobile);
+
+                // the library window, for anyone: before the play context is taken for the speaker (a visitor's look
+                //  leaves the owner's music alone)
+                if (TextCommand(tokens) == TextCommands.Library)
+                {
+                    OpenLibrary(e.Mobile);
+                    return;
+                }
 
                 // Ensure we have a valid PlayContext for this user before processing commands.
                 RefreshPlayContext(e.Mobile);

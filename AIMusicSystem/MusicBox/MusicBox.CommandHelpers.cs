@@ -20,6 +20,10 @@
 
 /* Scripts\Engines\AIMusicSystem\MusicBox\MusicBox.CommandHelpers.cs
  * Changelog
+ *  11/16/26, Adam (About and Tags)
+ *      'list <words>' finds the tracks whose title, author, About or tags hold every word ('list rock' finds a song
+ *      tagged "classic rock"); naming a song (play, buy, add, remove) is still by its title only. A remaster takes its
+ *      book's About and Tags, or keeps the track's when the book has none (MusicLibrary.KeepDescription).
  *  11/16/26, Adam (11/14/26 to 11/16/26: the composer's account, song renames)
  *      IsComposer: a track's composer is the character who owns it, or any character of the composer's account (the
  *      record's OwnerGUID). A track held for its composer on a shard that isn't its home (owned by SystemMobile) played
@@ -94,7 +98,8 @@ namespace Server.Items
         }
         private List<KeyValuePair<int, string>> CompositeList(Mobile from, string[] tokens, Filter filter = Filter.None)
         {
-            // "list by <composer>": that composer's tracks; "list <words>": the tracks whose titles have every word
+            // "list by <composer>": that composer's tracks; "list <words>": the tracks whose title, author, About or tags
+            //  have every word ("list rock" finds "classic rock")
             string author = string.Empty;
             string[] words = Array.Empty<string>();
             if (tokens.Length >= 3)
@@ -131,11 +136,11 @@ namespace Server.Items
                 if (!ok) ok = !GetFilter(Filter.Remastered) || kvp.Value.Remastered && (DateTime.UtcNow - kvp.Value.DateRemastered).TotalDays < 8;
                 if (ok)
                 {
-                    string title = (kvp.Key.ToString() ?? string.Empty).ToLowerInvariant();
+                    string searched = string.Join(" ", kvp.Key.ToString(), kvp.Key.Author, kvp.Key.About, kvp.Key.Tags).ToLowerInvariant();
                     // only list 'rejected' tracks for staff
                     if ((admin && Rejected(kvp.Key) || !Rejected(kvp.Key))
                         && (author == string.Empty || (kvp.Key.Author ?? string.Empty).ToLower().Contains(author))
-                        && words.All(w => title.Contains(w)))
+                        && words.All(w => searched.Contains(w)))
                         list.Add(new KeyValuePair<int, string>(color, text));
                 }
             }
@@ -335,6 +340,8 @@ namespace Server.Items
                 // The library's name for the track now: a remaster from a book with a name it had before it was
                 //  renamed doesn't undo the rename.
                 MusicLibrary.SetNames(rsm, remasterTarget.Title ?? "", remasterTarget.Author ?? "");
+                // its About and Tags: the new book's, or the track's when the book has none
+                MusicLibrary.KeepDescription(rsm, remasterTarget);
 
                 // Mark remaster metadata.
                 MusicLibrary.Repository[rsm].DateRemastered = DateTime.UtcNow;

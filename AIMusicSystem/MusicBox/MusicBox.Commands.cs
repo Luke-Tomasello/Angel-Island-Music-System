@@ -20,6 +20,8 @@
 
 /* Scripts\Engines\AIMusicSystem\MusicBox\MusicBox.Commands.cs
  * Changelog
+ *  11/16/26, Adam (About and Tags)
+ *      'list' help: words are found in a track's title, composer, About or tags.
  *  11/15/26, Adam (arranged by; the composer's account; the library)
  *      'library' (or 'browse'): every song in a window (MusicBox.LibraryGump.cs), for anyone near the box. Play and
  *      buy share their work with it: PlayTrack (full or sample) and BuyTrack (playlist or the price prompt), after the
@@ -120,7 +122,7 @@ namespace Server.Items
             Cmd(TextCommands.Next, "next", "Next, next song", (b, e, t) => b.HandleNext(e), Gate.StartsPlayback),
             Cmd(TextCommands.Repeat, "repeat", "Repeat, repeat last song", (b, e, t) => b.HandleRepeat(e), Gate.StartsPlayback),
             Cmd(TextCommands.Loop, "loop", "Loop, loop playlist", (b, e, t) => b.HandleLoop()),
-            Cmd(TextCommands.List, "list", "List [words | by <composer>], list all tracks, the tracks whose titles have those words, or a composer's tracks", (b, e, t) => b.HandleList(e, t)),
+            Cmd(TextCommands.List, "list", "List [words | by <composer>], list all tracks, the tracks whose title, composer, about or tags have those words, or a composer's tracks", (b, e, t) => b.HandleList(e, t)),
             Cmd(TextCommands.Library, "library browse", "Library (or browse), every song in a window: play, sample or buy them (anyone may look)", (b, e, t) => b.OpenLibrary(e.Mobile)),
             Cmd(TextCommands.Add, "add", "Add [song], add track (previously removed); Add alone, add music to the music box", (b, e, t) => b.HandleAdd(e, t)),
             Cmd(TextCommands.Remove, "remove ignore", "Remove, add a global track to the ignore list", (b, e, t) => b.HandleRemove(e, t)),

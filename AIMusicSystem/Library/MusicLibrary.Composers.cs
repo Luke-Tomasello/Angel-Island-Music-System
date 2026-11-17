@@ -20,6 +20,8 @@
 
 /* Scripts\Engines\AIMusicSystem\Library\MusicLibrary.Composers.cs
  * Changelog
+ *  11/16/26, Adam (About and Tags)
+ *      'status' shows each song's About and Tags, so its composer can check them.
  *  11/16/26, Adam (song renames)
  *      Composers hear of a renamed song once too ("Your song 'X' is now listed in the music library as 'Y'.", with
  *      staff's note), at their next music box visit (TellComposer) or in 'status', whatever the song's status.
@@ -762,21 +764,27 @@ namespace Server.Items
                 switch (info.Status)
                 {
                     case SubmissionStatus.Pending:
-                        lines.Add(string.Format("'{0}': waiting for review (submitted {1})", kvp.Key, Day(info.DateSubmitted)));
+                        lines.Add(string.Format("'{0}': waiting for review (submitted {1})", kvp.Key, Day(info.DateSubmitted)) + Described(kvp.Key));
                         break;
                     case SubmissionStatus.Approved:
-                        lines.Add(info.Remastered
+                        lines.Add((info.Remastered
                             ? string.Format("'{0}': approved; remastered {1}", kvp.Key, Day(info.DateRemastered))
-                            : string.Format("'{0}': approved {1}", kvp.Key, Day(info.DateApproved)));
+                            : string.Format("'{0}': approved {1}", kvp.Key, Day(info.DateApproved))) + Described(kvp.Key));
                         info.ComposerTold = true;
                         break;
                     default:
-                        lines.Add(string.Format("'{0}': not approved: {1}", kvp.Key, Sentence(ReviewReason(info))));
+                        lines.Add(string.Format("'{0}': not approved: {1}", kvp.Key, Sentence(ReviewReason(info))) + Described(kvp.Key));
                         info.ComposerTold = true;
                         break;
                 }
             }
             return lines;
+        }
+
+        // a song's About and Tags, for its composer to check ("; about: the Tetris theme; tags: folk, video game"), or ""
+        private static string Described(RolledUpSheetMusic song)
+        {
+            return (song.About.Length > 0 ? "; about: " + song.About : "") + (song.Tags.Length > 0 ? "; tags: " + song.Tags : "");
         }
 
         /// <summary>A renamed song, for its composer: the title they knew, the library's now, and staff's note.</summary>

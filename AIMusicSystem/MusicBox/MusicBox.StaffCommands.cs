@@ -20,6 +20,8 @@
 
 /* Scripts\Engines\AIMusicSystem\MusicBox\MusicBox.StaffCommands.cs
  * Changelog
+ *  11/16/26, Adam (About and Tags)
+ *      Review shows the reviewer a track's About and Tags, when it has them.
  *  11/14/26, Adam (arranged by)
  *      Review names a track's arranger, when it has one (By).
  *  11/14/26, Adam
@@ -115,6 +117,11 @@ namespace Server.Items
 
             if (rsm.Owner == null)
                 SendMessage(e.Mobile, 33, string.Format("Warning: {0} by {1} has no Owner.", rsm.Title, rsm.Author));
+
+            // its About and Tags, for the reviewer to check (players see the About; the tags are only searched)
+            if (rsm.About.Length > 0 || rsm.Tags.Length > 0)
+                SendMessage(e.Mobile, 54, string.Format("About: {0}. Tags: {1}.", rsm.About.Length > 0 ? rsm.About : "none",
+                    rsm.Tags.Length > 0 ? rsm.Tags : "none"));
 
             if (Approved(rsm))  // an unapproved track (the usual case here) is announced by PlayMusic, as pending
                 Say(string.Format("{0} by {1}.", rsm.Title, By(rsm)), hue: 54);

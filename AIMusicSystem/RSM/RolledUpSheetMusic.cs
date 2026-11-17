@@ -19,6 +19,11 @@
 
 /* Scripts/Engines/AIMusicSystem/RSM/RolledUpSheetMusic.cs
  * Changelog
+ *  11/16/26, Adam (About and Tags)
+ *      About and Tags: a song's '# About:' (what it is, up to 60 characters) and '# Tags:' (search words, up to 10, 100
+ *      characters) lines, read from its notes as '# Song:' is, so every copy, export and shared copy carries them and the
+ *      hash never counts them; nothing new is saved. NotesLine reads such a line, WithNotesLine sets (or adds, or
+ *      removes) it, TidyTags and DescriptionProblem are the rules. A single click shows the About under the author.
  *  11/16/26, Adam (song renames)
  *      TrackIDOf: the TrackID a sheet would have with another title and author, for a renamed song's former names
  *      (MusicLibrary.SameTrack). TrackID itself is unchanged.
@@ -54,6 +59,8 @@
 using Server.Items;
 using Server.Mobiles;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Server.Misc
 {
@@ -120,6 +127,14 @@ namespace Server.Misc
         public bool Napster { get { return m_napster; } set { m_napster = value; } }
         public string Composition { get { return m_composition; } set { m_composition = value; } }
         public bool HasComposition => !string.IsNullOrWhiteSpace(m_composition);
+
+        // About and Tags are lines in the notes ('# About: ...', '# Tags: ...'), as '# Song:' is: one place, which every
+        //  copy, export, import and shared copy carries, and which the hash skips (they never make a new song)
+        [CommandProperty(AccessLevel.GameMaster)]
+        public string About { get { ReadNotes(); return m_about; } }
+        [CommandProperty(AccessLevel.GameMaster)]
+        public string Tags { get { ReadNotes(); return m_tags; } }
+        public IEnumerable<string> TagList => TagsOf(Tags);
         // the author it was transcribed with (or given) stays: the notes' '# Author:' line doesn't replace it as it plays
         protected override bool KeepsItsAuthor => !string.IsNullOrEmpty(Author);
         #endregion Properties
@@ -170,6 +185,94 @@ namespace Server.Misc
             return Title;
         }
         #endregion Identity
+
+        #region About and Tags
+        public const int AboutMax = 60;            // characters
+        public const int TagsMax = 100;            // characters, all of them (", " between)
+        public const int TagsMaxCount = 10;
+
+        private string? m_notesRead;               // the composition About and Tags were read from (not saved)
+        private string m_about = "", m_tags = "";
+
+        private void ReadNotes()
+        {
+            if (ReferenceEquals(m_notesRead, m_composition))
+                return;
+            m_notesRead = m_composition;
+            m_about = NotesLine(m_composition, "about");
+            m_tags = NotesLine(m_composition, "tags");
+        }
+
+        /// <summary>The value of a song's '# name:' line (MusicCompiler.Directive; the last, if it has several), or "".</summary>
+        public static string NotesLine(string? notes, string name)
+        {
+            string found = "";
+            foreach (string line in (notes ?? "").Split('\n'))
+                if (MusicCompiler.Directive(line.TrimEnd('\r'), out string n, out string value) && n == name)
+                    found = value;
+            return found;
+        }
+
+        /// <summary>
+        /// The notes with their '# Name:' lines saying 'value' (every one of them); with none, one is added after the
+        /// '# Song:' line (or first). An empty value removes them. Other lines, and the line ends, are kept.
+        /// </summary>
+        public static string WithNotesLine(string notes, string name, string value)
+        {
+            notes ??= "";
+            string newline = notes.Contains("\r\n") ? "\r\n" : "\n";
+            List<string> lines = new List<string>(notes.Replace("\r\n", "\n").Split('\n'));
+            bool IsIt(string l) => MusicCompiler.Directive(l, out string n, out _) && n == name.ToLowerInvariant();
+            string line = "# " + name + ": " + value.Trim();
+            if (lines.Any(IsIt))
+            {
+                if (value.Trim().Length == 0)
+                    lines.RemoveAll(l => IsIt(l));
+                else
+                    for (int i = 0; i < lines.Count; i++)
+                        if (IsIt(lines[i]))
+                            lines[i] = line;
+            }
+            else if (value.Trim().Length > 0)
+            {
+                int song = lines.FindIndex(l => MusicCompiler.Directive(l, out string n, out _) && n == "song");
+                lines.Insert(song + 1, line);
+            }
+            return string.Join(newline, lines);
+        }
+
+        /// <summary>Tags as written ("Rock,  classic rock ,rock,") tidied: each trimmed, spaces single, none empty, none twice
+        /// (any case), ", " between ("Rock, classic rock").</summary>
+        public static string TidyTags(string? tags)
+        {
+            return string.Join(", ", TagsOf(tags));
+        }
+
+        private static List<string> TagsOf(string? tags)
+        {
+            List<string> list = new List<string>();
+            foreach (string raw in (tags ?? "").Split(','))
+            {
+                string tag = string.Join(" ", raw.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries));
+                if (tag.Length > 0 && !list.Contains(tag, StringComparer.OrdinalIgnoreCase))
+                    list.Add(tag);
+            }
+            return list;
+        }
+
+        /// <summary>Why About or Tags can't be used (too long, too many), or null.</summary>
+        public static string? DescriptionProblem(string about, string tags)
+        {
+            if (about.Length > AboutMax)
+                return string.Format("The # About: line is {0} characters ({1} at most).", about.Length, AboutMax);
+            int count = TagsOf(tags).Count;
+            if (count > TagsMaxCount)
+                return string.Format("The # Tags: line has {0} tags ({1} at most).", count, TagsMaxCount);
+            if (TidyTags(tags).Length > TagsMax)
+                return string.Format("The # Tags: line is {0} characters ({1} at most).", TidyTags(tags).Length, TagsMax);
+            return null;
+        }
+        #endregion About and Tags
 
         #region Construction
         [Constructable]
@@ -237,6 +340,8 @@ namespace Server.Misc
                 LabelTo(from, m_title);
             if (Author != null)
                 LabelTo(from, Author);
+            if (About.Length > 0)
+                LabelTo(from, About);
         }
 
         public override void OnDoubleClick(Mobile from)

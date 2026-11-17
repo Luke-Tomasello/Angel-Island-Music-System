@@ -20,6 +20,9 @@
 
 /* Scripts\Engines\AIMusicSystem\Library\MusicLibrary.cs
  * Changelog
+ *  11/16/26, Adam (About and Tags)
+ *      KeepDescription: a remaster takes its book's # About: and # Tags:, or keeps the song's when the book has none.
+ *      Describe: staff set a library song's About and Tags (its notes' lines; the composer isn't told).
  *  11/16/26, Adam (song renames)
  *      A library song can be renamed (Rename): its title and author everywhere the sheet keeps them, the '# Song:' line
  *      in its notes included (the instrument reads it as it plays), and never its hash (its notes only). MusicInfo
@@ -129,6 +132,40 @@ namespace Server.Items
         {
             return System.Text.RegularExpressions.Regex.Replace(notes, @"(?im)^#[ \t]*" + name + @"[ \t]*:[^\r\n]*",
                 m => "# " + name + ": " + value);
+        }
+
+        /// <summary>
+        /// A library song's About and Tags (null: as it is; "": none), staff's: the '# About:' and '# Tags:' lines in its
+        /// notes (RolledUpSheetMusic.WithNotesLine; the tags tidied). The hash skips them: it stays the same song. The
+        /// composer isn't told (a rename is news; a description isn't). False if nothing changed.
+        /// </summary>
+        public static bool Describe(RolledUpSheetMusic sheet, string? about, string? tags)
+        {
+            if (sheet == null || sheet.Deleted || !sheet.HasComposition)
+                return false;
+            string notes = sheet.Composition;
+            if (about != null && about.Trim() != sheet.About)
+                notes = RolledUpSheetMusic.WithNotesLine(notes, "About", about.Trim());
+            if (tags != null && RolledUpSheetMusic.TidyTags(tags) != sheet.Tags)
+                notes = RolledUpSheetMusic.WithNotesLine(notes, "Tags", RolledUpSheetMusic.TidyTags(tags));
+            if (notes == sheet.Composition)
+                return false;
+            sheet.Composition = notes;
+            return true;
+        }
+
+        /// <summary>
+        /// A remaster's About and Tags: the new book's, or, where it has none, the song's before it ('before'), so a book
+        /// without them doesn't clear them. They are lines in its notes (RolledUpSheetMusic.About, Tags).
+        /// </summary>
+        public static void KeepDescription(RolledUpSheetMusic sheet, RolledUpSheetMusic before)
+        {
+            if (sheet == null || before == null || !sheet.HasComposition)
+                return;
+            if (sheet.About.Length == 0 && before.About.Length > 0)
+                sheet.Composition = RolledUpSheetMusic.WithNotesLine(sheet.Composition, "About", before.About);
+            if (sheet.Tags.Length == 0 && before.Tags.Length > 0)
+                sheet.Composition = RolledUpSheetMusic.WithNotesLine(sheet.Composition, "Tags", before.Tags);
         }
 
         /// <summary>

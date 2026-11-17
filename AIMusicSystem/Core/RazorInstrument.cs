@@ -19,6 +19,10 @@
 
 /* Scripts/Skill Items/Musical Instruments/RazorInstrument.cs
  * ChangeLog
+ *  11/16/26, Adam (directives)
+ *      ParseDirectives reads each line with MusicCompiler.Directive, as a book is read: a directive is named only at
+ *      the start of its line (a line holding 'author:' or 'song:' in its text changed the author or song name), and
+ *      a value keeps every character (# Song: Prelude in C# minor is announced with its #).
  *  11/8/26, Adam (2026 modernization, 10/23/26 to 11/8/26)
  *      A song's performance is an object (Performance, returned by StartMusic and StartDeviceMusic) with a State,
  *      Cancel() and Completed, raised exactly once with why it ended; a timer callback of an earlier performance stops
@@ -1194,135 +1198,38 @@ namespace Server.Items
                 if (true_match == null || int_match == null)
                     return;
 
-                string lower = line.ToLower();
+                // a directive is named at the start of its line only (MusicCompiler.Directive): the rest is its value
+                if (!MusicCompiler.Directive(line, out string name, out string value))
+                    return;
 
-                // '# Timer: Classic|Dynamic|Anchored': matched exactly ('# NewTimer:' also contains "timer:")
-                string directive = lower.TrimStart('#', ' ', '\t');
-                if (directive.StartsWith("timer:"))
+                switch (name)
                 {
-                    string value = directive.Substring("timer:".Length).Trim();
-                    if (!int.TryParse(value, out _) && Enum.TryParse(value, true, out TimerMode timer) && Enum.IsDefined(timer))
-                        m_timerHeader = timer;
-                }
-                else if (lower.Contains("author:"))
-                {   // razor instruments only care about the music, not author, how the player placed, etc.
-                    try
-                    {
+                    case "timer":       // '# Timer: Classic|Dynamic|Anchored'
+                        if (!int.TryParse(value, out _) && Enum.TryParse(value, true, out TimerMode timer) && Enum.IsDefined(timer))
+                            m_timerHeader = timer;
+                        break;
+                    case "author":      // razor instruments only care about the music, not author, how the player placed, etc.
                         if (!KeepsItsAuthor)    // sheet music keeps the author it was transcribed with
-                        {
-                            m_author = line.Replace("#", "");
-                            m_author = m_author.Replace("author:", "", StringComparison.CurrentCultureIgnoreCase).Trim();
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        AimsLog.LogException(ex);
-                    }
-                }
-                else if (lower.Contains("instrument:"))
-                {
-                    try
-                    {
-                        string instrument = line.Replace("#", "");
-                        instrument = instrument.Replace("instrument:", "", StringComparison.CurrentCultureIgnoreCase).Trim();
-                        ConfigureInstrument(instrument);
-                    }
-                    catch (Exception ex)
-                    {
-                        AimsLog.LogException(ex);
-                    }
-                }
-                else if (lower.Contains("prefetch:"))
-                {
-                    try
-                    {
-                        string sx = line.Replace("#", "");
-                        sx = sx.Replace("prefetch:", "", StringComparison.CurrentCultureIgnoreCase).Trim();
-
-                        string resultString = true_match.Match(sx).Value;
-
-                        if (!bool.TryParse(resultString, out bool prefetch))
-                            Prefetch = false;
-                        else
-                            Prefetch = prefetch;
-                    }
-                    catch (Exception ex)
-                    {
-                        AimsLog.LogException(ex);
-                        Prefetch = false;
-                    }
-                }
-                else if (lower.Contains("newtimer:"))
-                {
-                    try
-                    {
-                        string sx = line.Replace("#", "");
-                        sx = sx.Replace("newtimer:", "", StringComparison.CurrentCultureIgnoreCase).Trim();
-
-                        string resultString = true_match.Match(sx).Value;
-
-                        if (!bool.TryParse(resultString, out bool newTimer))
-                            NewTimer = false;
-                        else
-                            NewTimer = newTimer;
-                    }
-                    catch (Exception ex)
-                    {
-                        AimsLog.LogException(ex);
-                        NewTimer = false;
-                    }
-                }
-                else if (lower.Contains("tempo:"))
-                {
-                    try
-                    {
-                        string sx = line.Replace("#", "");
-                        sx = sx.Replace("tempo:", "", StringComparison.CurrentCultureIgnoreCase).Trim();
-
-                        string resultString = int_match.Match(sx).Value;
-
-                        if (!int.TryParse(resultString, out int tempo))
-                            Tempo = Commands.SystemMusicPlayer.DefaultTempo;
-                        else
-                            Tempo = tempo;
-                    }
-                    catch (Exception ex)
-                    {
-                        AimsLog.LogException(ex);
-                        Tempo = Commands.SystemMusicPlayer.DefaultTempo;
-                    }
-                }
-                else if (lower.Contains("concertmode:"))
-                {
-                    try
-                    {
-                        string sx = line.Replace("#", "");
-                        sx = sx.Replace("concertmode:", "", StringComparison.CurrentCultureIgnoreCase).Trim();
-
-                        string resultString = true_match.Match(sx).Value;
-
-                        if (!bool.TryParse(resultString, out bool concertMode))
-                            ConcertMode = false;
-                        else
-                            ConcertMode = concertMode;
-                    }
-                    catch (Exception ex)
-                    {
-                        AimsLog.LogException(ex);
-                        ConcertMode = false;
-                    }
-                }
-                else if (lower.Contains("song:"))
-                {
-                    try
-                    {
-                        m_songName = line.Replace("#", "");
-                        m_songName = m_songName.Replace("song:", "", StringComparison.CurrentCultureIgnoreCase).Trim();
-                    }
-                    catch (Exception ex)
-                    {
-                        AimsLog.LogException(ex);
-                    }
+                            m_author = value;
+                        break;
+                    case "instrument":
+                        ConfigureInstrument(value);
+                        break;
+                    case "prefetch":
+                        Prefetch = true_match.IsMatch(value);
+                        break;
+                    case "newtimer":
+                        NewTimer = true_match.IsMatch(value);
+                        break;
+                    case "tempo":
+                        Tempo = int.TryParse(int_match.Match(value).Value, out int tempo) ? tempo : Commands.SystemMusicPlayer.DefaultTempo;
+                        break;
+                    case "concertmode":
+                        ConcertMode = true_match.IsMatch(value);
+                        break;
+                    case "song":
+                        m_songName = value;
+                        break;
                 }
             }
             catch (Exception ex)
